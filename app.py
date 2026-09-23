@@ -1,0 +1,3052 @@
+from flask import (
+    Flask, render_template_string,
+    redirect, request, session, url_for,
+    send_from_directory, send_file, jsonify, Response
+)
+import sqlite3
+import os
+import json
+import base64
+import io
+from pathlib import Path
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+from functools import wraps
+from werkzeug.security import (
+    check_password_hash,
+    generate_password_hash
+)
+from werkzeug.utils import secure_filename
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import serialization
+from pywebpush import webpush, WebPushException
+
+app = Flask(__name__)
+app.secret_key = os.environ.get(
+    "SECRET_KEY",
+    "act-bedflow-dev-key-change-later"
+)
+
+BASE_DIR = Path(__file__).resolve().parent
+UPLOAD_FOLDER = BASE_DIR / "uploads"
+UPLOAD_FOLDER.mkdir(exist_ok=True)
+app.config["UPLOAD_FOLDER"] = str(UPLOAD_FOLDER)
+app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
+ALLOWED_EXTENSIONS = {"pdf"}
+VAPID_RUNTIME_PRIVATE_FILE = Path(os.environ.get(
+    "ACT_VAPID_RUNTIME_KEY",
+    "/tmp/act_vapid_private.pem"
+))
+
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    ""
+).strip()
+
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = (
+        "postgresql://"
+        + DATABASE_URL[len("postgres://"):]
+    )
+
+USE_POSTGRES = bool(DATABASE_URL)
+LOCAL_DB = Path(__file__).with_name("bedflow.db")
+
+if USE_POSTGRES:
+    import psycopg
+    from psycopg.rows import dict_row
+
+    DATABASE_INTEGRITY_ERRORS = (
+        psycopg.IntegrityError,
+    )
+else:
+    DATABASE_INTEGRITY_ERRORS = (
+        sqlite3.IntegrityError,
+    )
+
+# =========================
+# DATABASE ADAPTER
+# =========================
+
+class DatabaseConnection:
+
+    def __init__(self, connection):
+        self.connection = connection
+
+    def execute(self, sql, params=()):
+        if USE_POSTGRES:
+            sql = sql.replace("?", "%s")
+
+        return self.connection.execute(sql, params)
+
+    def commit(self):
+        self.connection.commit()
+
+    def rollback(self):
+        self.connection.rollback()
+
+    def close(self):
+        self.connection.close()
+
+
+def get_db():
+    if USE_POSTGRES:
+        connection = psycopg.connect(
+            DATABASE_URL,
+            row_factory=dict_row,
+            connect_timeout=15
+        )
+    else:
+        connection = sqlite3.connect(
+            LOCAL_DB,
+            timeout=30
+        )
+        connection.row_factory = sqlite3.Row
+
+    return DatabaseConnection(connection)
+
+def add_log(
+    conn,
+    action,
+    bed_name=None,
+    old_value=None,
+    new_value=None
+):
+    conn.execute("""
+        INSERT INTO activity_log
+        (
+            timestamp,
+            username,
+            role,
+            action,
+            bed_name,
+            old_value,
+            new_value
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        now_text(),
+        session.get("username", "system"),
+        session.get("role", "system"),
+        action,
+        bed_name,
+        old_value,
+        new_value
+    ))
+# Saudi Arabia timezone
+SAUDI_TZ = ZoneInfo("Asia/Riyadh")
+
+
+def now_dt():
+    """Return the current Saudi Arabia time as a naive datetime for DB comparisons."""
+    return datetime.now(SAUDI_TZ).replace(tzinfo=None)
+
+
+def now_text():
+    """Return the current Saudi Arabia time in the database timestamp format."""
+    return now_dt().strftime("%Y-%m-%d %H:%M:%S")
+
+
+
+# =========================
+# INTEGRATED TEMPLATE STRINGS (mobile upload edition)
+# =========================
+
+MODULES_HTML_V31 = '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">\n<title>ACT Operations</title>\n<style>\n*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:980px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:24px}.brand h1{margin:0;font-size:30px}.sub{color:#6b7280;margin-top:5px}.user{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:bold}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.card{display:block;text-decoration:none;color:#172033;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:24px;box-shadow:0 8px 24px rgba(23,32,51,.05)}.icon{font-size:36px}.title{font-size:22px;font-weight:800;margin:12px 0 6px}.desc{color:#6b7280;line-height:1.5}.metric{margin-top:18px;padding-top:14px;border-top:1px solid #eef1f5;font-weight:800}.go{margin-top:8px;color:#1f6feb;font-weight:800}.footer{margin-top:22px;display:flex;gap:10px;flex-wrap:wrap}.btn{padding:10px 13px;border-radius:10px;background:#fff;border:1px solid #e5e7eb;color:#172033;text-decoration:none;font-weight:bold;font-size:13px}.role{color:#6b7280;font-size:12px;margin-top:3px}@media(max-width:700px){.wrap{padding:18px 16px}.grid{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}.user{width:100%}}\n</style></head>\n<body><div class="wrap">\n<div class="top"><div class="brand"><h1>ACT Operations</h1><div class="sub">BedFlow + Doctor Call</div><div class="role">Signed in as {{ role|upper }}</div></div><div class="user">👤 {{ display_name }}</div></div>\n<div class="grid">\n{% if show_bedflow %}<a class="card" href="/"><div class="icon">🛏️</div><div class="title">ACT BedFlow</div><div class="desc">ICU bed availability, confirmation and live status tracking.</div><div class="metric">{{ available_beds }} beds available now</div><div class="go">Open BedFlow →</div></a>{% endif %}\n{% if show_doctor_call %}<a class="card" href="{% if role == \'doctor\' %}/doctor-call/doctor{% else %}/doctor-call{% endif %}"><div class="icon">🔔</div><div class="title">ACT Doctor Call</div><div class="desc">Case PDF review, doctor-specific notifications and Accept / Reject workflow.</div><div class="metric">{{ pending_cases }} cases awaiting action</div><div class="go">Open Doctor Call →</div></a>{% endif %}\n</div>\n<div class="footer"><a class="btn" href="/change-password">Change Password</a>{% if role == \'admin\' %}<a class="btn" href="/doctor-call/admin/doctors">Manage Doctors</a>{% endif %}<a class="btn" href="/logout">Sign Out</a></div>\n</div></body></html>'
+
+DOCTOR_CALL_INSURANCE_HTML = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="20"><title>ACT Doctor Call</title><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1100px;margin:auto;padding:20px 16px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.brand h1{margin:0;font-size:27px}.sub{color:#6b7280;margin-top:4px}.top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.btn{display:inline-block;border:0;border-radius:10px;padding:11px 15px;font-weight:bold;text-decoration:none;cursor:pointer}.primary{background:#1f6feb;color:white}.success{background:#14804a;color:white}.danger{background:#c93c37;color:white}.light{background:white;border:1px solid #e5e7eb;color:#172033}.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 6px 18px rgba(0,0,0,.035)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}label{display:block;color:#6b7280;font-size:13px;margin-bottom:6px}input,select{width:100%;padding:12px;border:1px solid #d5dae2;border-radius:10px;background:white;font-size:15px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #e5e7eb;font-size:14px}th{color:#6b7280;font-size:12px;text-transform:uppercase}.badge{display:inline-block;padding:6px 9px;border-radius:999px;background:#e8eef8;font-weight:bold;font-size:12px}.small{color:#6b7280;font-size:13px}.notice{background:#e9f8ef;border:1px solid #9bd6ad;color:#176b36;padding:11px;border-radius:10px;margin-bottom:14px}.actions{display:flex;gap:10px;flex-wrap:wrap}iframe{width:100%;height:72vh;border:1px solid #e5e7eb;border-radius:12px}.module-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}@media(max-width:700px){.grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}table{display:block;overflow-x:auto;white-space:nowrap}}</style></head><body><div class="wrap">\n<div class="topbar"><div class="brand"><h1>ACT Doctor Call</h1><div class="sub">Insurance · Doctor Case Review</div></div><div class="top-actions"><a class="btn light" href="/modules">Apps</a><a class="btn light" href="/">BedFlow</a>{% if role == \'admin\' %}<a class="btn light" href="/doctor-call/admin/doctors">Doctors</a>{% endif %}<a class="btn light" href="/logout">Logout</a></div></div>\n{% if message %}<div class="notice">{{ message }}</div>{% endif %}\n<div class="card"><h2 style="margin-top:0">Send New Case</h2><form method="post" action="/doctor-call/new" enctype="multipart/form-data"><div class="grid"><div><label>Case No. *</label><input name="case_no" required></div><div><label>Patient Ref.</label><input name="patient_ref" placeholder="Demo reference only"></div><div><label>Specialty *</label><select id="specialty" name="specialty" required><option value="">Choose specialty</option>{% for specialty in specialties %}<option value="{{ specialty }}">{{ specialty }}</option>{% endfor %}</select></div><div><label>Doctor *</label><select id="doctor" name="doctor_username" required><option value="">Choose doctor</option>{% for d in doctors %}<option value="{{ d[\'username\'] }}" data-specialty="{{ d[\'specialty\'] }}">{{ d[\'display_name\'] }} — {{ d[\'specialty\'] }}</option>{% endfor %}</select></div><div style="grid-column:1/-1"><label>Medical File PDF *</label><input type="file" name="pdf" accept="application/pdf" required></div></div><div style="margin-top:14px"><button class="btn primary">Send to Doctor 🔔</button></div></form></div>\n<div class="card"><h2 style="margin-top:0">Cases</h2><table><thead><tr><th>Case</th><th>Specialty</th><th>Doctor</th><th>Status</th><th>Sent</th><th>Opened</th><th>Decision</th><th></th></tr></thead><tbody>{% for c in cases %}<tr><td>{{ c[\'case_no\'] }}</td><td>{{ c[\'specialty\'] }}</td><td>{{ c[\'doctor_display\'] or c[\'doctor_username\'] }}</td><td><span class="badge">{{ c[\'status\'] }}</span></td><td>{{ c[\'sent_at\'] }}</td><td>{{ c[\'opened_at\'] or \'-\' }}</td><td>{{ c[\'decided_at\'] or \'-\' }}</td><td><a class="btn light" href="/doctor-call/case/{{ c[\'id\'] }}">View</a></td></tr>{% else %}<tr><td colspan="8" class="small">No cases yet.</td></tr>{% endfor %}</tbody></table></div></div>\n<script>const specialty=document.getElementById(\'specialty\'),doctor=document.getElementById(\'doctor\');function filterDoctors(){const s=specialty.value;doctor.value=\'\';[...doctor.options].forEach((o,i)=>{if(i===0)return;o.hidden=!!s&&o.dataset.specialty!==s;});}specialty.addEventListener(\'change\',filterDoctors);</script></body></html>'
+
+DOCTOR_CALL_DOCTOR_HTML = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="30"><link rel="manifest" href="/manifest.json"><title>Doctor Inbox</title><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1100px;margin:auto;padding:20px 16px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.brand h1{margin:0;font-size:27px}.sub{color:#6b7280;margin-top:4px}.top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.btn{display:inline-block;border:0;border-radius:10px;padding:11px 15px;font-weight:bold;text-decoration:none;cursor:pointer}.primary{background:#1f6feb;color:white}.success{background:#14804a;color:white}.danger{background:#c93c37;color:white}.light{background:white;border:1px solid #e5e7eb;color:#172033}.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 6px 18px rgba(0,0,0,.035)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}label{display:block;color:#6b7280;font-size:13px;margin-bottom:6px}input,select{width:100%;padding:12px;border:1px solid #d5dae2;border-radius:10px;background:white;font-size:15px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #e5e7eb;font-size:14px}th{color:#6b7280;font-size:12px;text-transform:uppercase}.badge{display:inline-block;padding:6px 9px;border-radius:999px;background:#e8eef8;font-weight:bold;font-size:12px}.small{color:#6b7280;font-size:13px}.notice{background:#e9f8ef;border:1px solid #9bd6ad;color:#176b36;padding:11px;border-radius:10px;margin-bottom:14px}.actions{display:flex;gap:10px;flex-wrap:wrap}iframe{width:100%;height:72vh;border:1px solid #e5e7eb;border-radius:12px}.module-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}@media(max-width:700px){.grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}table{display:block;overflow-x:auto;white-space:nowrap}}</style></head><body><div class="wrap"><div class="topbar"><div class="brand"><h1>ACT Doctor Call</h1><div class="sub">{{ display_name }} · {{ doctor_specialty }}</div></div><div class="top-actions"><a class="btn light" href="/logout">Logout</a></div></div>\n<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><h2 style="margin:0 0 6px">Phone Notifications 🔔</h2><div id="notificationStatus" class="small">Checking notification status...</div></div><button id="enableNotifications" class="btn primary" type="button">Enable Notifications</button></div></div>\n<div class="card"><h2 style="margin-top:0">Doctor Inbox</h2><table><thead><tr><th>Case</th><th>Specialty</th><th>Status</th><th>Sent</th><th></th></tr></thead><tbody>{% for c in cases %}<tr><td>{{ c[\'case_no\'] }}</td><td>{{ c[\'specialty\'] }}</td><td><span class="badge">{{ c[\'status\'] }}</span></td><td>{{ c[\'sent_at\'] }}</td><td><a class="btn primary" href="/doctor-call/case/{{ c[\'id\'] }}">Open Case</a></td></tr>{% else %}<tr><td colspan="5" class="small">No cases assigned to you.</td></tr>{% endfor %}</tbody></table></div></div>\n<script>const VAPID_PUBLIC_KEY="{{ vapid_public_key }}";function b64arr(s){const p="=".repeat((4-s.length%4)%4);const b=(s+p).replace(/-/g,"+").replace(/_/g,"/");const r=atob(b);return Uint8Array.from([...r].map(c=>c.charCodeAt(0)));}function setStatus(m,e=false){const st=document.getElementById(\'notificationStatus\'),bt=document.getElementById(\'enableNotifications\');st.textContent=m;if(e){bt.textContent=\'Notifications Enabled ✅\';bt.disabled=true;bt.className=\'btn success\';}}async function registerPush(){if(!(\'serviceWorker\'in navigator)||!(\'PushManager\'in window)){setStatus(\'Push notifications are not supported on this browser.\');return;}const perm=await Notification.requestPermission();if(perm!==\'granted\'){setStatus(\'Notification permission was not granted.\');return;}const reg=await navigator.serviceWorker.register(\'/sw.js\');let sub=await reg.pushManager.getSubscription();if(!sub){sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64arr(VAPID_PUBLIC_KEY)});}const resp=await fetch(\'/doctor-call/api/push/subscribe\',{method:\'POST\',headers:{\'Content-Type\':\'application/json\'},body:JSON.stringify(sub)});const data=await resp.json();if(data.ok)setStatus(\'This device is registered for new case notifications.\',true);else setStatus(\'Could not register this device.\');}document.getElementById(\'enableNotifications\').addEventListener(\'click\',registerPush);window.addEventListener(\'load\',async()=>{try{if(!(\'serviceWorker\'in navigator)||!(\'PushManager\'in window)){setStatus(\'Push notifications are not supported on this browser.\');return;}const reg=await navigator.serviceWorker.register(\'/sw.js\');const sub=await reg.pushManager.getSubscription();if(sub&&Notification.permission===\'granted\'){const resp=await fetch(\'/doctor-call/api/push/subscribe\',{method:\'POST\',headers:{\'Content-Type\':\'application/json\'},body:JSON.stringify(sub)});const data=await resp.json();if(data.ok){setStatus(\'This device is registered for new case notifications.\',true);return;}}if(Notification.permission===\'denied\')setStatus(\'Notifications are blocked in browser settings.\');else setStatus(\'Tap Enable Notifications on this phone.\');}catch(e){console.error(e);setStatus(\'Notification setup requires HTTPS.\');}});</script></body></html>'
+
+DOCTOR_CALL_CASE_HTML = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Case {{ case[\'case_no\'] }}</title><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1100px;margin:auto;padding:20px 16px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.brand h1{margin:0;font-size:27px}.sub{color:#6b7280;margin-top:4px}.top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.btn{display:inline-block;border:0;border-radius:10px;padding:11px 15px;font-weight:bold;text-decoration:none;cursor:pointer}.primary{background:#1f6feb;color:white}.success{background:#14804a;color:white}.danger{background:#c93c37;color:white}.light{background:white;border:1px solid #e5e7eb;color:#172033}.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 6px 18px rgba(0,0,0,.035)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}label{display:block;color:#6b7280;font-size:13px;margin-bottom:6px}input,select{width:100%;padding:12px;border:1px solid #d5dae2;border-radius:10px;background:white;font-size:15px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #e5e7eb;font-size:14px}th{color:#6b7280;font-size:12px;text-transform:uppercase}.badge{display:inline-block;padding:6px 9px;border-radius:999px;background:#e8eef8;font-weight:bold;font-size:12px}.small{color:#6b7280;font-size:13px}.notice{background:#e9f8ef;border:1px solid #9bd6ad;color:#176b36;padding:11px;border-radius:10px;margin-bottom:14px}.actions{display:flex;gap:10px;flex-wrap:wrap}iframe{width:100%;height:72vh;border:1px solid #e5e7eb;border-radius:12px}.module-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}@media(max-width:700px){.grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}table{display:block;overflow-x:auto;white-space:nowrap}}</style></head><body><div class="wrap"><div class="topbar"><div class="brand"><h1>Case {{ case[\'case_no\'] }}</h1><div class="sub">{{ case[\'specialty\'] }} · {{ doctor_name }} · {{ case[\'status\'] }}</div></div><div class="top-actions">{% if role == \'doctor\' %}<a class="btn light" href="/doctor-call/doctor">Inbox</a>{% else %}<a class="btn light" href="/doctor-call">Cases</a>{% endif %}</div></div>{% if role == \'doctor\' and case[\'status\'] not in [\'Accepted\',\'Rejected\'] %}<div class="card"><div class="actions"><form method="post" action="/doctor-call/case/{{ case[\'id\'] }}/decision/Accepted"><button class="btn success">Accept ✅</button></form><form method="post" action="/doctor-call/case/{{ case[\'id\'] }}/decision/Rejected"><button class="btn danger">Reject ❌</button></form></div></div>{% endif %}<div class="card"><iframe src="/doctor-call/case/{{ case[\'id\'] }}/pdf"></iframe></div></div></body></html>'
+
+DOCTOR_CALL_ADMIN_HTML = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Doctor Accounts</title><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1150px;margin:auto;padding:20px 16px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.brand h1{margin:0;font-size:27px}.sub{color:#6b7280;margin-top:4px}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{display:inline-block;border:0;border-radius:10px;padding:10px 13px;font-weight:bold;text-decoration:none;cursor:pointer}.primary{background:#1f6feb;color:white}.light{background:white;border:1px solid #e5e7eb;color:#172033}.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}label{display:block;color:#6b7280;font-size:12px;margin-bottom:5px}input{width:100%;padding:11px;border:1px solid #d5dae2;border-radius:9px;font-size:14px}.notice{background:#e9f8ef;border:1px solid #9bd6ad;color:#176b36;padding:11px;border-radius:10px;margin-bottom:14px}.doctor{border-top:1px solid #eef1f5;padding:16px 0}.doctor:first-child{border-top:0}.doctor-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}.name{font-weight:800}.status{font-size:12px;padding:5px 8px;border-radius:999px;background:#eef3fa}.edit-grid{display:grid;grid-template-columns:1.2fr 1fr 1fr auto;gap:8px;align-items:end}.small{font-size:12px;color:#6b7280}@media(max-width:760px){.grid,.edit-grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}.edit-grid .btn{width:100%}}</style></head><body><div class="wrap"><div class="topbar"><div class="brand"><h1>Doctor Accounts</h1><div class="sub">Accounts, specialties and notification ownership.</div></div><div class="actions"><a class="btn light" href="/doctor-call">Doctor Call</a><a class="btn light" href="/modules">Apps</a></div></div>{% if message %}<div class="notice">{{ message }}</div>{% endif %}<div class="card"><h2 style="margin-top:0">Add Doctor</h2><form method="post" action="/doctor-call/admin/doctors/add"><div class="grid"><div><label>Username *</label><input name="username" required></div><div><label>Display Name *</label><input name="display_name" required></div><div><label>Specialty *</label><input name="specialty" placeholder="e.g. Cardiology" required></div><div><label>Temporary Password *</label><input type="password" name="password" minlength="6" required></div></div><div style="margin-top:14px"><button class="btn primary">Add Doctor</button></div></form></div><div class="card"><h2 style="margin-top:0">Doctors</h2><div class="small" style="margin-bottom:8px">Each doctor receives only the cases assigned to their username.</div>{% for d in doctors %}<div class="doctor"><div class="doctor-head"><div><div class="name">{{ d[\'display_name\'] }}</div><div class="small">@{{ d[\'username\'] }}</div></div><div class="status">{{ \'Active\' if d[\'active\']==1 else \'Disabled\' }}</div></div><form method="post" action="/doctor-call/admin/doctors/{{ d[\'username\'] }}/edit"><div class="edit-grid"><div><label>Display Name</label><input name="display_name" value="{{ d[\'display_name\'] }}" required></div><div><label>Specialty</label><input name="specialty" value="{{ d[\'specialty\'] }}" required></div><div><label>New Password (optional)</label><input type="password" name="new_password" minlength="6" placeholder="Leave blank to keep"></div><button class="btn primary">Save</button></div></form><form method="post" action="/doctor-call/admin/doctors/{{ d[\'username\'] }}/toggle" style="margin-top:8px"><button class="btn light">{{ \'Disable Doctor\' if d[\'active\']==1 else \'Activate Doctor\' }}</button></form></div>{% else %}<div>No doctors.</div>{% endfor %}</div></div></body></html>'
+
+DEFAULT_USERS = {
+    "insurance": {
+        "password": "1234",
+        "role": "insurance",
+        "display": "Insurance Department"
+    },
+    "icu": {
+        "password": "1234",
+        "role": "icu",
+        "display": "ICU Department"
+    },
+    "admin": {
+        "password": "1234",
+        "role": "admin",
+        "display": "ACT BedFlow Admin"
+    },
+    "doctor": {
+        "password": "1234",
+        "role": "doctor",
+        "display": "Demo Doctor"
+    }
+}
+
+
+def init_db():
+    conn = get_db()
+
+    bed_id_definition = (
+        "BIGSERIAL PRIMARY KEY"
+        if USE_POSTGRES
+        else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    )
+
+    log_id_definition = (
+        "BIGSERIAL PRIMARY KEY"
+        if USE_POSTGRES
+        else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    )
+
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS beds (
+            id {bed_id_definition},
+            name TEXT UNIQUE NOT NULL,
+            bed_type TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'Available'
+        )
+    """)
+
+    if USE_POSTGRES:
+        column_rows = conn.execute("""
+            SELECT column_name AS name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'beds'
+        """).fetchall()
+    else:
+        column_rows = conn.execute(
+            "PRAGMA table_info(beds)"
+        ).fetchall()
+
+    columns = [
+        row["name"]
+        for row in column_rows
+    ]
+
+    if "last_updated" not in columns:
+        if USE_POSTGRES:
+            conn.execute("""
+                ALTER TABLE beds
+                ADD COLUMN IF NOT EXISTS last_updated TEXT
+            """)
+        else:
+            conn.execute("""
+                ALTER TABLE beds
+                ADD COLUMN last_updated TEXT
+            """)
+
+    if "active" not in columns:
+        if USE_POSTGRES:
+            conn.execute("""
+                ALTER TABLE beds
+                ADD COLUMN IF NOT EXISTS active INTEGER NOT NULL DEFAULT 1
+            """)
+        else:
+            conn.execute("""
+                ALTER TABLE beds
+                ADD COLUMN active INTEGER NOT NULL DEFAULT 1
+            """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS system_status (
+            id INTEGER PRIMARY KEY,
+            last_icu_confirmation TEXT
+        )
+    """)
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS activity_log (
+            id {log_id_definition},
+            timestamp TEXT NOT NULL,
+            username TEXT NOT NULL,
+            role TEXT NOT NULL,
+            action TEXT NOT NULL,
+            bed_name TEXT,
+            old_value TEXT,
+            new_value TEXT
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            username TEXT PRIMARY KEY,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+
+    for username, user in DEFAULT_USERS.items():
+        user_values = (
+            username,
+            generate_password_hash(user["password"]),
+            user["role"],
+            user["display"],
+            now_text()
+        )
+
+        if USE_POSTGRES:
+            conn.execute("""
+                INSERT INTO users
+                (
+                    username,
+                    password_hash,
+                    role,
+                    display_name,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (username) DO NOTHING
+            """, user_values)
+        else:
+            conn.execute("""
+                INSERT OR IGNORE INTO users
+                (
+                    username,
+                    password_hash,
+                    role,
+                    display_name,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?)
+            """, user_values)
+
+    default_beds = [
+        (
+            f"ICU-{i:02d}",
+            "Regular ICU"
+        )
+        for i in range(1, 11)
+    ]
+    default_beds.append((
+        "Isolation Room",
+        "Isolation"
+    ))
+
+    for bed_name, bed_type in default_beds:
+        bed_values = (
+            bed_name,
+            bed_type,
+            "Available",
+            now_text(),
+            1
+        )
+
+        if USE_POSTGRES:
+            conn.execute("""
+                INSERT INTO beds
+                (
+                    name,
+                    bed_type,
+                    status,
+                    last_updated,
+                    active
+                )
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (name) DO NOTHING
+            """, bed_values)
+        else:
+            conn.execute("""
+                INSERT OR IGNORE INTO beds
+                (
+                    name,
+                    bed_type,
+                    status,
+                    last_updated,
+                    active
+                )
+                VALUES (?, ?, ?, ?, ?)
+            """, bed_values)
+
+    conn.execute("""
+        UPDATE beds
+        SET last_updated = ?
+        WHERE last_updated IS NULL
+           OR last_updated = ''
+    """, (now_text(),))
+
+    if USE_POSTGRES:
+        conn.execute("""
+            INSERT INTO system_status
+            (id, last_icu_confirmation)
+            VALUES (1, ?)
+            ON CONFLICT (id) DO NOTHING
+        """, (now_text(),))
+    else:
+        conn.execute("""
+            INSERT OR IGNORE INTO system_status
+            (id, last_icu_confirmation)
+            VALUES (1, ?)
+        """, (now_text(),))
+
+    conn.commit()
+    conn.close()
+
+
+# =========================
+# LOGIN HELPERS
+# =========================
+
+def login_required(function):
+    @wraps(function)
+    def wrapper(*args, **kwargs):
+        if "username" not in session:
+            return redirect(url_for("login"))
+
+        return function(*args, **kwargs)
+
+    return wrapper
+
+
+def icu_required(function):
+    @wraps(function)
+    def wrapper(*args, **kwargs):
+
+        if "username" not in session:
+            return redirect(url_for("login"))
+
+        if session.get("role") not in ("icu", "admin"):
+            return redirect(url_for("home"))
+
+        return function(*args, **kwargs)
+
+    return wrapper
+
+
+# =========================
+# LOGIN PAGE
+# =========================
+
+LOGIN_HTML = """
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1">
+
+<title>ACT Operations Login</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f4f7fb;
+    color: #172033;
+}
+
+.page {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.card {
+    width: 100%;
+    max-width: 420px;
+    background: white;
+    padding: 35px;
+    border-radius: 18px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 10px 30px rgba(0,0,0,.06);}
+
+.logo {
+    font-size: 31px;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.subtitle {
+    color: #6b7280;
+    margin-bottom: 30px;
+}
+
+label {
+    display: block;
+    font-size: 14px;
+    font-weight: bold;
+    margin: 15px 0 7px;
+}
+
+input {
+    width: 100%;
+    padding: 13px;
+    border: 1px solid #d5dae2;
+    border-radius: 9px;
+    font-size: 16px;
+}
+
+button {
+    width: 100%;
+    margin-top: 22px;
+    padding: 13px;
+    border: none;
+    border-radius: 9px;
+    background: #172033;
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.error {
+    background: #fdecec;
+    color: #a52a2a;
+    border: 1px solid #f1b7b7;
+    padding: 11px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.success {
+    background: #e9f8ef;
+    color: #176b36;
+    border: 1px solid #9bd6ad;
+    padding: 11px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.footer {
+    text-align: center;
+    color: #9aa0aa;
+    font-size: 12px;
+    margin-top: 25px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="page">
+
+    <div class="card">
+
+        <div class="logo">
+            ACT Operations
+        </div>
+
+        <div class="subtitle">
+            BedFlow + Doctor Call
+        </div>
+
+        {% if error %}
+
+        <div class="error">
+            Incorrect username or password.
+        </div>
+
+        {% endif %}
+
+        {% if success_message %}
+
+        <div class="success">
+            {{ success_message }}
+        </div>
+
+        {% endif %}
+
+        <form method="POST">
+
+            <label>
+                Username
+            </label>
+
+            <input
+                name="username"
+                autocomplete="username"
+                required
+            >
+
+            <label>
+                Password
+            </label>
+
+            <input
+                type="password"
+                name="password"
+                autocomplete="current-password"
+                required
+            >
+
+            <button type="submit">
+                Sign In
+            </button>
+
+        </form>
+
+        <div class="footer">
+            ACT Integrated v3.1
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+
+</html>
+"""
+
+
+# =========================
+# CHANGE PASSWORD PAGE
+# =========================
+
+CHANGE_PASSWORD_HTML = """
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1">
+
+<title>Change Password - ACT BedFlow</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f4f7fb;
+    color: #172033;
+}
+
+.page {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.card {
+    width: 100%;
+    max-width: 440px;
+    background: white;
+    padding: 35px;
+    border-radius: 18px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 10px 30px rgba(0,0,0,.06);
+}
+
+h1 {
+    margin: 0 0 6px;
+    font-size: 28px;
+}
+
+.subtitle {
+    color: #6b7280;
+    margin-bottom: 24px;
+}
+
+label {
+    display: block;
+    font-size: 14px;
+    font-weight: bold;
+    margin: 15px 0 7px;
+}
+
+input {
+    width: 100%;
+    padding: 13px;
+    border: 1px solid #d5dae2;
+    border-radius: 9px;
+    font-size: 16px;
+}
+
+button {
+    width: 100%;
+    margin-top: 22px;
+    padding: 13px;
+    border: none;
+    border-radius: 9px;
+    background: #172033;
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.error {
+    background: #fdecec;
+    color: #a52a2a;
+    border: 1px solid #f1b7b7;
+    padding: 11px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.back {
+    display: block;
+    text-align: center;
+    margin-top: 18px;
+    color: #6b7280;
+    text-decoration: none;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="page">
+
+    <div class="card">
+
+        <h1>Change Password</h1>
+
+        <div class="subtitle">
+            {{ display_name }} — username cannot be changed.
+        </div>
+
+        {% if error_message %}
+
+        <div class="error">
+            {{ error_message }}
+        </div>
+
+        {% endif %}
+
+        <form method="POST">
+
+            <label>Current Password</label>
+
+            <input
+                type="password"
+                name="current_password"
+                autocomplete="current-password"
+                required
+            >
+
+            <label>New Password</label>
+
+            <input
+                type="password"
+                name="new_password"
+                autocomplete="new-password"
+                minlength="6"
+                required
+            >
+
+            <label>Confirm New Password</label>
+
+            <input
+                type="password"
+                name="confirm_password"
+                autocomplete="new-password"
+                minlength="6"
+                required
+            >
+
+            <button type="submit">
+                Save New Password
+            </button>
+
+        </form>
+
+        <a class="back" href="/modules">
+            Back to Apps
+        </a>
+
+    </div>
+
+</div>
+
+</body>
+
+</html>
+"""
+
+
+# =========================
+# DASHBOARD
+# =========================
+
+DASHBOARD_HTML = """
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1">
+
+<meta http-equiv="refresh" content="30">
+
+<title>ACT BedFlow</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: #f4f7fb;
+    margin: 0;
+    color: #172033;
+}
+
+.container {
+    max-width: 1150px;
+    margin: auto;
+    padding: 24px;
+}
+
+/* =========================
+   CLEAN HEADER
+   ========================= */
+
+.app-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.brand h1 {
+    margin: 0;
+    font-size: 30px;
+    line-height: 1.1;
+}
+
+.subtitle {
+    color: #6b7280;
+    margin-top: 5px;
+    font-size: 15px;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.module-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 9px 12px;
+    border-radius: 12px;
+    background: #172033;
+    color: white;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.role-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 40px;
+    padding: 9px 12px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.account-menu {
+    position: relative;
+}
+
+.account-menu summary {
+    list-style: none;
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 23px;
+    line-height: 1;
+    user-select: none;
+}
+
+.account-menu summary::-webkit-details-marker {
+    display: none;
+}
+
+.account-menu[open] summary {
+    background: #eef2f7;
+}
+
+.menu-card {
+    position: absolute;
+    right: 0;
+    top: 48px;
+    z-index: 20;
+    min-width: 190px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 7px;
+    box-shadow: 0 12px 30px rgba(23, 32, 51, .12);
+}
+
+.menu-card a {
+    display: block;
+    padding: 11px 12px;
+    border-radius: 8px;
+    color: #172033;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.menu-card a:hover {
+    background: #f4f7fb;
+}
+
+.menu-card .signout {
+    color: #b42318;
+}
+
+/* =========================
+   ICU STATUS CARD
+   ========================= */
+
+.status-card {
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.status-card.fresh {
+    background: #e9f8ef;
+    border: 1px solid #9bd6ad;
+    color: #176b36;
+}
+
+.status-card.warning {
+    background: #fff3cd;
+    border: 1px solid #f1c453;
+    color: #7a5600;
+}
+
+.status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+}
+
+.status-title {
+    font-size: 17px;
+    font-weight: bold;
+    line-height: 1.35;
+}
+
+.status-time {
+    margin-top: 5px;
+    font-size: 13px;
+    opacity: .85;
+}
+
+.status-note {
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.confirm-button {
+    border: none;
+    border-radius: 9px;
+    padding: 11px 15px;
+    cursor: pointer;
+    font-weight: bold;
+    white-space: nowrap;
+    background: #172033;
+    color: white;
+}
+
+/* =========================
+   SUMMARY
+   ========================= */
+
+.summary {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 25px;
+}
+
+.summary-box {
+    background: white;
+    border-radius: 12px;
+    padding: 18px;
+    border: 1px solid #e5e7eb;
+}
+
+.summary-box span {
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.summary-box strong {
+    display: block;
+    font-size: 28px;
+    margin-top: 5px;
+}
+
+/* =========================
+   BED CARDS
+   ========================= */
+
+.beds {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+}
+
+.bed {
+    background: white;
+    border-radius: 14px;
+    padding: 18px;
+    border: 1px solid #e5e7eb;
+}
+
+.bed h3 {
+    margin: 0 0 12px 0;
+}
+
+.status {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.Available {
+    color: #159447;
+}
+
+.Occupied {
+    color: #d14343;
+}
+
+.Reserved {
+    color: #d18b00;
+}
+
+.Cleaning {
+    color: #2878c7;
+}
+
+.updated {
+    color: #8a919e;
+    font-size: 12px;
+    margin-bottom: 13px;
+}
+
+select {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 15px;
+    background: white;
+}
+
+.update-button {
+    width: 100%;
+    margin-top: 8px;
+    padding: 10px;
+    border: 0;
+    border-radius: 8px;
+    background: #172033;
+    color: white;
+    cursor: pointer;
+}
+
+.read-only {
+    background: #f7f8fa;
+    border-radius: 8px;
+    padding: 10px;
+    color: #6b7280;
+    font-size: 13px;
+}
+
+.isolation {
+    border: 2px solid #805ad5;
+}
+
+.inactive {
+    opacity: .55;
+    background: #f1f3f5;
+}
+
+/* =========================
+   ADMIN
+   ========================= */
+
+.admin-panel {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 20px;
+}
+
+.admin-panel form {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.admin-panel input,
+.admin-panel select {
+    flex: 1;
+    min-width: 180px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+}
+
+.admin-button {
+    padding: 10px 14px;
+    border: 0;
+    border-radius: 8px;
+    background: #172033;
+    color: white;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.toggle-button {
+    width: 100%;
+    margin-top: 8px;
+    padding: 9px;
+    border: 1px solid #d5dae2;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+}
+
+.footer {
+    text-align: center;
+    color: #8a919e;
+    font-size: 12px;
+    margin-top: 25px;
+}
+
+/* =========================
+   MOBILE
+   ========================= */
+
+@media (max-width: 800px) {
+
+    .container {
+        padding: 18px 16px 24px;
+    }
+
+    .app-header {
+        align-items: flex-start;
+        margin-bottom: 14px;
+    }
+
+    .brand h1 {
+        font-size: 27px;
+    }
+
+    .subtitle {
+        font-size: 14px;
+    }
+
+    .header-actions {
+        gap: 7px;
+    }
+
+    .role-pill {
+        max-width: 145px;
+        min-height: 38px;
+        padding: 8px 10px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 12px;
+    }
+
+    .account-menu summary {
+        width: 38px;
+        height: 38px;
+    }
+
+    .menu-card {
+        top: 45px;
+    }
+
+    .status-row {
+        display: block;
+    }
+
+    .confirm-button {
+        width: 100%;
+        margin-top: 12px;
+    }
+
+    .summary {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-bottom: 22px;
+    }
+
+    .summary-box {
+        padding: 16px;
+    }
+
+    .summary-box strong {
+        font-size: 27px;
+    }
+
+    .beds {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 430px) {
+
+    .role-pill {
+        max-width: 125px;
+    }
+
+    .brand h1 {
+        font-size: 25px;
+    }
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+    <header class="app-header">
+
+        <div class="brand">
+            <h1>ACT BedFlow</h1>
+
+            <div class="subtitle">
+                ICU Bed Availability System
+            </div>
+        </div>
+
+        <div class="header-actions">
+
+            {% if role in ["insurance", "admin"] %}
+            <a class="module-link" href="/modules">Apps</a>
+            {% endif %}
+
+            <div class="role-pill">
+                👤 {{ display_name }}
+            </div>
+
+            <details class="account-menu">
+                <summary aria-label="Account menu">⋮</summary>
+
+                <div class="menu-card">
+                    <a href="/change-password">
+                        Change Password
+                    </a>
+
+                    <a class="signout" href="/logout">
+                        Sign Out
+                    </a>
+                </div>
+            </details>
+
+        </div>
+
+    </header>
+
+
+    {% if stale %}
+
+    <div class="status-card warning">
+
+        <div class="status-row">
+
+            <div>
+                <div class="status-title">
+                    ⚠ ICU status needs confirmation
+                </div>
+
+                <div class="status-time">
+                    Last confirmed: <strong>{{ last_confirmation_display }}</strong>
+                </div>
+
+                <div class="status-note">
+                    ICU bed availability has not been confirmed for more than 30 minutes.
+                    Please contact ICU for an updated status.
+                </div>
+            </div>
+
+            {% if role in ["icu", "admin"] %}
+
+            <form method="POST" action="/confirm">
+                <button class="confirm-button" type="submit">
+                    ✓ Confirm ICU Status
+                </button>
+            </form>
+
+            {% endif %}
+
+        </div>
+
+    </div>
+
+    {% else %}
+
+    <div class="status-card fresh">
+
+        <div class="status-row">
+
+            <div>
+                <div class="status-title">
+                    ✓ ICU availability confirmed
+                </div>
+
+                <div class="status-time">
+                    Updated: <strong>{{ last_confirmation_display }}</strong>
+                </div>
+            </div>
+
+            {% if role in ["icu", "admin"] %}
+
+            <form method="POST" action="/confirm">
+                <button class="confirm-button" type="submit">
+                    ✓ Confirm ICU Status
+                </button>
+            </form>
+
+            {% endif %}
+
+        </div>
+
+    </div>
+
+    {% endif %}
+
+
+    {% if role == "admin" %}
+
+    <div class="admin-panel">
+
+        <h3>Admin — Bed Management</h3>
+
+        <form method="POST"
+              action="/admin/add-bed">
+
+            <input
+                name="name"
+                placeholder="Bed name e.g. ICU-11"
+                required
+            >
+
+            <select name="bed_type">
+                <option value="Regular ICU">
+                    Regular ICU
+                </option>
+
+                <option value="Isolation">
+                    Isolation
+                </option>
+            </select>
+
+            <button
+                class="admin-button"
+                type="submit">
+
+                + Add Bed
+
+            </button>
+
+        </form>
+
+        <a href="/activity-log"
+           class="admin-button"
+           style="
+               display:inline-block;
+               margin-top:15px;
+               text-decoration:none;
+               text-align:center;
+           ">
+            Activity Log
+        </a>
+
+    </div>
+
+    {% endif %}
+
+
+    <div class="summary">
+
+        <div class="summary-box">
+            <span>Total Beds</span>
+            <strong>{{ total }}</strong>
+        </div>
+
+        <div class="summary-box">
+            <span>Available</span>
+            <strong>{{ available }}</strong>
+        </div>
+
+        <div class="summary-box">
+            <span>Occupied</span>
+            <strong>{{ occupied }}</strong>
+        </div>
+
+        <div class="summary-box">
+            <span>Reserved</span>
+            <strong>{{ reserved }}</strong>
+        </div>
+
+        <div class="summary-box">
+            <span>Cleaning</span>
+            <strong>{{ cleaning }}</strong>
+        </div>
+
+    </div>
+
+
+    <div class="beds">
+
+        {% for bed in beds %}
+
+        <div class="
+            bed
+            {% if bed['bed_type'] == 'Isolation' %}
+                isolation
+            {% endif %}
+            {% if bed['active'] == 0 %}
+                inactive
+            {% endif %}
+        ">
+
+            <h3>
+                {{ bed['name'] }}
+            </h3>
+
+            <div class="status {{ bed['status'] }}">
+                ● {{ bed['status'] }}
+            </div>
+
+            <div class="updated">
+                Updated:
+                {{ bed['last_updated'] }}
+            </div>
+
+
+            {% if role in ["icu", "admin"]
+                  and bed['active'] == 1 %}
+
+            <form method="POST"
+                  action="/update/{{ bed['id'] }}">
+
+                <select name="status">
+
+                    {% for status in
+                    ['Available',
+                     'Occupied',
+                     'Reserved',
+                     'Cleaning'] %}
+
+                    <option
+                        value="{{ status }}"
+                        {% if bed['status'] == status %}
+                            selected
+                        {% endif %}
+                    >
+                        {{ status }}
+                    </option>
+
+                    {% endfor %}
+
+                </select>
+
+                <button
+                    class="update-button"
+                    type="submit">
+
+                    Update Status
+
+                </button>
+
+            </form>
+
+            {% else %}
+
+            <div class="read-only">
+
+                {% if bed['active'] == 0 %}
+                    Bed Disabled
+                {% else %}
+                    View only — updated by ICU
+                {% endif %}
+
+            </div>
+
+            {% endif %}
+
+
+            {% if role == "admin" %}
+
+            <form method="POST"
+                  action="/admin/toggle-bed/{{ bed['id'] }}">
+
+                <button
+                    class="toggle-button"
+                    type="submit">
+
+                    {% if bed['active'] == 1 %}
+                        Disable Bed
+                    {% else %}
+                        Reactivate Bed
+                    {% endif %}
+
+                </button>
+
+            </form>
+
+            {% endif %}
+
+        </div>
+
+        {% endfor %}
+
+    </div>
+
+
+    <div class="footer">
+        Auto refresh every 30 seconds
+    </div>
+
+</div>
+
+</body>
+
+</html>
+"""
+
+
+# =========================
+# APP LANDING
+# =========================
+
+def landing_url():
+    return url_for("modules")
+
+
+# =========================
+# ROUTES
+# =========================
+
+@app.route(
+    "/login",
+    methods=["GET", "POST"]
+)
+def login():
+
+    if "username" in session:
+        return redirect(landing_url())
+
+    error = False
+
+    if request.method == "POST":
+
+        username = (
+            request.form.get("username", "")
+            .strip()
+            .lower()
+        )
+
+        password = request.form.get(
+            "password", ""
+        )
+
+        conn = get_db()
+
+        user = conn.execute("""
+            SELECT username, password_hash, role, display_name
+            FROM users
+            WHERE username = ?
+        """, (username,)).fetchone()
+
+        conn.close()
+
+        if user and check_password_hash(
+            user["password_hash"],
+            password
+        ):
+
+            session["username"] = username
+            session["role"] = user["role"]
+            session["display"] = user["display_name"]
+
+            return redirect(landing_url())
+
+        error = True
+
+    return render_template_string(
+        LOGIN_HTML,
+        error=error,
+        success_message=None
+    )
+
+
+@app.route("/logout")
+def logout():
+
+    session.clear()
+
+    return redirect(url_for("login"))
+
+
+@app.route(
+    "/change-password",
+    methods=["GET", "POST"]
+)
+@login_required
+def change_password():
+
+    error_message = None
+    username = session["username"]
+
+    conn = get_db()
+
+    user = conn.execute("""
+        SELECT username, password_hash
+        FROM users
+        WHERE username = ?
+    """, (username,)).fetchone()
+
+    if user is None:
+        conn.close()
+        session.clear()
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+
+        current_password = request.form.get(
+            "current_password", ""
+        )
+        new_password = request.form.get(
+            "new_password", ""
+        )
+        confirm_password = request.form.get(
+            "confirm_password", ""
+        )
+
+        if not check_password_hash(
+            user["password_hash"],
+            current_password
+        ):
+            error_message = "Current password is incorrect."
+
+        elif len(new_password) < 6:
+            error_message = (
+                "New password must contain at least 6 characters."
+            )
+
+        elif new_password != confirm_password:
+            error_message = (
+                "New password and confirmation do not match."
+            )
+
+        elif check_password_hash(
+            user["password_hash"],
+            new_password
+        ):
+            error_message = (
+                "New password must be different from the current password."
+            )
+
+        else:
+            conn.execute("""
+                UPDATE users
+                SET password_hash = ?,
+                    updated_at = ?
+                WHERE username = ?
+            """, (
+                generate_password_hash(new_password),
+                now_text(),
+                username
+            ))
+
+            add_log(
+                conn,
+                action="Password changed"
+            )
+
+            conn.commit()
+            conn.close()
+            session.clear()
+
+            return render_template_string(
+                LOGIN_HTML,
+                error=False,
+                success_message=(
+                    "Password changed successfully. "
+                    "Please sign in again."
+                )
+            )
+
+    conn.close()
+
+    return render_template_string(
+        CHANGE_PASSWORD_HTML,
+        error_message=error_message,
+        display_name=session["display"]
+    )
+
+
+@app.route("/")
+@login_required
+def home():
+
+    if session.get("role") == "doctor":
+        return redirect(url_for("doctor_call_doctor"))
+
+    conn = get_db()
+
+    if session.get("role") == "admin":
+
+        beds = conn.execute("""
+            SELECT *
+            FROM beds
+            ORDER BY id
+        """).fetchall()
+
+    else:
+
+        beds = conn.execute("""
+            SELECT *
+            FROM beds
+            WHERE active = 1
+            ORDER BY id
+        """).fetchall()
+
+    system = conn.execute("""
+        SELECT *
+        FROM system_status
+        WHERE id = 1
+    """).fetchone()
+
+    conn.close()
+
+    active_beds = [
+        b for b in beds
+        if b["active"] == 1
+    ]
+
+    total = len(active_beds)
+
+    available = sum(
+        b["status"] == "Available"
+        for b in active_beds
+    )
+
+    occupied = sum(
+        b["status"] == "Occupied"
+        for b in active_beds
+    )
+
+    reserved = sum(
+        b["status"] == "Reserved"
+        for b in active_beds
+    )
+
+    cleaning = sum(
+        b["status"] == "Cleaning"
+        for b in active_beds
+    )
+
+    last_confirmation = datetime.strptime(
+        system["last_icu_confirmation"],
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+    stale = (
+        now_dt() - last_confirmation
+        > timedelta(minutes=30)
+    )
+
+    return render_template_string(
+        DASHBOARD_HTML,
+
+        beds=beds,
+
+        total=total,
+        available=available,
+        occupied=occupied,
+        reserved=reserved,
+        cleaning=cleaning,
+
+        stale=stale,
+
+        last_confirmation_display=
+            last_confirmation.strftime(
+                "%d/%m/%Y %I:%M %p"
+            ),
+
+        role=session["role"],
+        display_name=session["display"]
+    )
+
+@app.route(
+    "/update/<int:bed_id>",
+    methods=["POST"]
+)
+@icu_required
+def update_bed(bed_id):
+
+    status = request.form.get(
+        "status", ""
+    )
+
+    allowed = [
+        "Available",
+        "Occupied",
+        "Reserved",
+        "Cleaning"
+    ]
+
+    if status in allowed:
+
+        conn = get_db()
+
+        bed = conn.execute("""
+            SELECT name, status, active
+            FROM beds
+            WHERE id = ?
+        """, (
+            bed_id,
+        )).fetchone()
+
+        if bed is not None and bed["active"] == 1:
+
+            old_status = bed["status"]
+            bed_name = bed["name"]
+            update_time = now_text()
+
+            conn.execute("""
+                UPDATE beds
+                SET status = ?,
+                    last_updated = ?
+                WHERE id = ?
+                  AND active = 1
+            """, (
+                status,
+                update_time,
+                bed_id
+            ))
+
+            # Any valid ICU/Admin bed update also confirms that the
+            # displayed ICU availability has just been reviewed.
+            conn.execute("""
+                UPDATE system_status
+                SET last_icu_confirmation = ?
+                WHERE id = 1
+            """, (
+                update_time,
+            ))
+
+            if old_status != status:
+                add_log(
+                    conn,
+                    action="Bed status changed",
+                    bed_name=bed_name,
+                    old_value=old_status,
+                    new_value=status
+                )
+
+            add_log(
+                conn,
+                action="ICU status confirmed via bed update",
+                bed_name=bed_name,
+                old_value=None,
+                new_value="Confirmed"
+            )
+
+            conn.commit()
+
+        conn.close()
+
+    return redirect(url_for("home"))
+
+@app.route(
+    "/confirm",
+    methods=["POST"]
+)
+@icu_required
+def confirm_icu():
+
+    conn = get_db()
+
+    conn.execute("""
+        UPDATE system_status
+        SET last_icu_confirmation = ?
+        WHERE id = 1
+    """, (
+        now_text(),
+    ))
+
+    add_log(
+        conn,
+        action="ICU status confirmed",
+        bed_name=None,
+        old_value=None,
+        new_value="Confirmed"
+    )
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("home"))
+
+# =========================
+# ADMIN
+# =========================
+
+@app.route(
+    "/admin/add-bed",
+    methods=["POST"]
+)
+@login_required
+def admin_add_bed():
+
+    if session.get("role") != "admin":
+        return redirect(url_for("home"))
+
+    name = request.form.get(
+        "name", ""
+    ).strip()
+
+    bed_type = request.form.get(
+        "bed_type",
+        "Regular ICU"
+    ).strip()
+
+    if bed_type not in (
+        "Regular ICU",
+        "Isolation"
+    ):
+        bed_type = "Regular ICU"
+
+    if name:
+
+        conn = get_db()
+
+        try:
+
+            conn.execute("""
+                INSERT INTO beds
+                (
+                    name,
+                    bed_type,
+                    status,
+                    last_updated,
+                    active
+                )
+                VALUES (
+                    ?,
+                    ?,
+                    'Available',
+                    ?,
+                    1
+                )
+            """, (
+                name,
+                bed_type,
+                now_text()
+            ))
+
+            add_log(
+                conn,
+                action="Bed added",
+                bed_name=name,
+                old_value=None,
+                new_value=bed_type
+            )
+
+            conn.commit()
+
+        except DATABASE_INTEGRITY_ERRORS:
+            pass
+
+        finally:
+            conn.close()
+
+    return redirect(url_for("home"))
+
+@app.route(
+    "/admin/toggle-bed/<int:bed_id>",
+    methods=["POST"]
+)
+@login_required
+def admin_toggle_bed(bed_id):
+
+    if session.get("role") != "admin":
+        return redirect(url_for("home"))
+
+    conn = get_db()
+
+    bed = conn.execute("""
+        SELECT name, active
+        FROM beds
+        WHERE id = ?
+    """, (
+        bed_id,
+    )).fetchone()
+
+    if bed is not None:
+
+        old_active = bed["active"]
+        bed_name = bed["name"]
+
+        new_active = (
+            0
+            if old_active == 1
+            else 1
+        )
+
+        conn.execute("""
+            UPDATE beds
+            SET active = ?,
+                last_updated = ?
+            WHERE id = ?
+        """, (
+            new_active,
+            now_text(),
+            bed_id
+        ))
+
+        if new_active == 0:
+            action_name = "Bed disabled"
+            old_value = "Active"
+            new_value = "Disabled"
+        else:
+            action_name = "Bed reactivated"
+            old_value = "Disabled"
+            new_value = "Active"
+
+        add_log(
+            conn,
+            action=action_name,
+            bed_name=bed_name,
+            old_value=old_value,
+            new_value=new_value
+        )
+
+        conn.commit()
+
+    conn.close()
+
+    return redirect(url_for("home"))
+# =========================
+# ACTIVITY LOG PAGE
+# =========================
+
+ACTIVITY_LOG_HTML = """
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1">
+
+<title>ACT BedFlow Activity Log</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f4f7fb;
+    color: #172033;
+}
+
+.container {
+    max-width: 1200px;
+    margin: auto;
+    padding: 25px;
+}
+
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 25px;
+}
+
+h1 {
+    margin: 0 0 5px 0;
+}
+
+.subtitle {
+    color: #6b7280;
+}
+
+.back {
+    display: inline-block;
+    text-decoration: none;
+    background: #172033;
+    color: white;
+    padding: 11px 16px;
+    border-radius: 9px;
+    font-weight: bold;
+}
+
+.card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th,
+td {
+    padding: 14px;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+    white-space: nowrap;
+}
+
+th {
+    background: #f7f8fa;
+}
+
+.empty {
+    padding: 30px;
+    text-align: center;
+    color: #6b7280;
+}
+
+@media (max-width: 800px) {
+
+    .topbar {
+        display: block;
+    }
+
+    .back {
+        margin-top: 15px;
+    }
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="topbar">
+
+        <div>
+
+            <h1>
+                Activity Log
+            </h1>
+
+            <div class="subtitle">
+                ACT BedFlow — System Activity History
+            </div>
+
+        </div>
+
+        <a class="back"
+           href="/">
+            ← Back to Dashboard
+        </a>
+
+    </div>
+
+
+    <div class="card">
+
+        {% if logs %}
+
+        <table>
+
+            <thead>
+
+                <tr>
+                    <th>Date & Time</th>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th>Action</th>
+                    <th>Bed</th>
+                    <th>Old Value</th>
+                    <th>New Value</th>
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+                {% for log in logs %}
+
+                <tr>
+
+                    <td>
+                        {{ log['timestamp'] }}
+                    </td>
+
+                    <td>
+                        {{ log['username'] }}
+                    </td>
+
+                    <td>
+                        {{ log['role'] }}
+                    </td>
+
+                    <td>
+                        {{ log['action'] }}
+                    </td>
+
+                    <td>
+                        {{ log['bed_name'] or '-' }}
+                    </td>
+
+                    <td>
+                        {{ log['old_value'] or '-' }}
+                    </td>
+
+                    <td>
+                        {{ log['new_value'] or '-' }}
+                    </td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+        {% else %}
+
+        <div class="empty">
+            No activity recorded yet.
+        </div>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+</body>
+
+</html>
+"""
+
+
+@app.route("/activity-log")
+@login_required
+def activity_log():
+
+    if session.get("role") != "admin":
+        return redirect(url_for("home"))
+
+    conn = get_db()
+
+    logs = conn.execute("""
+        SELECT *
+        FROM activity_log
+        ORDER BY id DESC
+        LIMIT 200
+    """).fetchall()
+
+    conn.close()
+
+    return render_template_string(
+        ACTIVITY_LOG_HTML,
+        logs=logs
+    )
+# =========================
+# ACT MODULE HUB
+# =========================
+
+@app.route("/modules")
+@login_required
+def modules():
+    role = session.get("role")
+    show_bedflow = role in ("insurance", "icu", "admin")
+    show_doctor_call = role in ("insurance", "doctor", "admin")
+
+    conn = get_db()
+    available_beds = conn.execute(
+        "SELECT COUNT(*) AS c FROM beds WHERE active = 1 AND status = 'Available'"
+    ).fetchone()["c"]
+
+    if role == "doctor":
+        pending_cases = conn.execute(
+            "SELECT COUNT(*) AS c FROM doctor_cases WHERE doctor_username = ? AND status IN ('Sent','Opened')",
+            (session.get("username"),)
+        ).fetchone()["c"]
+    else:
+        pending_cases = conn.execute(
+            "SELECT COUNT(*) AS c FROM doctor_cases WHERE status IN ('Sent','Opened')"
+        ).fetchone()["c"]
+    conn.close()
+
+    return render_template_string(
+        MODULES_HTML_V31,
+        display_name=session.get("display", session.get("username")),
+        role=role,
+        show_bedflow=show_bedflow,
+        show_doctor_call=show_doctor_call,
+        available_beds=available_beds,
+        pending_cases=pending_cases
+    )
+
+
+# =========================
+# DOCTOR CALL DATABASE
+# =========================
+
+def init_doctor_call_db():
+    conn = get_db()
+    id_definition = (
+        "BIGSERIAL PRIMARY KEY"
+        if USE_POSTGRES
+        else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    )
+
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS doctor_cases (
+            id {id_definition},
+            case_no TEXT NOT NULL,
+            patient_ref TEXT,
+            specialty TEXT NOT NULL,
+            doctor_username TEXT NOT NULL,
+            pdf_filename TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'Sent',
+            sent_at TEXT NOT NULL,
+            opened_at TEXT,
+            decided_at TEXT,
+            decision TEXT
+        )
+    """)
+
+    if USE_POSTGRES:
+        conn.execute("ALTER TABLE doctor_cases ADD COLUMN IF NOT EXISTS pdf_original_name TEXT")
+        conn.execute("ALTER TABLE doctor_cases ADD COLUMN IF NOT EXISTS pdf_data BYTEA")
+    else:
+        doctor_case_columns = [
+            row["name"] for row in conn.execute("PRAGMA table_info(doctor_cases)").fetchall()
+        ]
+        if "pdf_original_name" not in doctor_case_columns:
+            conn.execute("ALTER TABLE doctor_cases ADD COLUMN pdf_original_name TEXT")
+        if "pdf_data" not in doctor_case_columns:
+            conn.execute("ALTER TABLE doctor_cases ADD COLUMN pdf_data BLOB")
+
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id {id_definition},
+            username TEXT NOT NULL,
+            endpoint TEXT UNIQUE NOT NULL,
+            subscription_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS doctor_profiles (
+            username TEXT PRIMARY KEY,
+            specialty TEXT NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS app_settings (
+            setting_key TEXT PRIMARY KEY,
+            setting_value TEXT NOT NULL
+        )
+    """)
+
+    if USE_POSTGRES:
+        conn.execute("""
+            INSERT INTO doctor_profiles (username, specialty, active)
+            VALUES (?, ?, 1)
+            ON CONFLICT (username) DO NOTHING
+        """, ("doctor", "Cardiology"))
+    else:
+        conn.execute("""
+            INSERT OR IGNORE INTO doctor_profiles (username, specialty, active)
+            VALUES (?, ?, 1)
+        """, ("doctor", "Cardiology"))
+
+    conn.commit()
+    conn.close()
+
+
+def setting_get(key):
+    conn = get_db()
+    row = conn.execute(
+        "SELECT setting_value FROM app_settings WHERE setting_key = ?",
+        (key,)
+    ).fetchone()
+    conn.close()
+    return row["setting_value"] if row else None
+
+
+def setting_set(key, value):
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO app_settings (setting_key, setting_value)
+        VALUES (?, ?)
+        ON CONFLICT (setting_key) DO UPDATE SET
+            setting_value = excluded.setting_value
+    """, (key, value))
+    conn.commit()
+    conn.close()
+
+
+def ensure_vapid_keys():
+    private_pem = setting_get("vapid_private_pem")
+    public_b64 = setting_get("vapid_public_b64")
+
+    if not private_pem or not public_b64:
+        private_key = ec.generate_private_key(ec.SECP256R1())
+        private_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        ).decode("utf-8")
+
+        numbers = private_key.public_key().public_numbers()
+        raw_public = (
+            b"\x04"
+            + numbers.x.to_bytes(32, "big")
+            + numbers.y.to_bytes(32, "big")
+        )
+        public_b64 = base64.urlsafe_b64encode(
+            raw_public
+        ).rstrip(b"=").decode("ascii")
+
+        setting_set("vapid_private_pem", private_pem)
+        setting_set("vapid_public_b64", public_b64)
+
+    VAPID_RUNTIME_PRIVATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    VAPID_RUNTIME_PRIVATE_FILE.write_text(private_pem, encoding="utf-8")
+    return public_b64
+
+
+def allowed_pdf(filename):
+    return (
+        "." in filename
+        and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+    )
+
+
+def send_case_push(case_id, case_no, specialty, doctor_username):
+    ensure_vapid_keys()
+    conn = get_db()
+    subscriptions = conn.execute("""
+        SELECT endpoint, subscription_json
+        FROM push_subscriptions
+        WHERE username = ?
+    """, (doctor_username,)).fetchall()
+    conn.close()
+
+    payload = json.dumps({
+        "title": "🔔 ACT Doctor Call — Review Required",
+        "body": f"{specialty} case {case_no} is waiting for review.",
+        "url": f"/doctor-call/case/{case_id}",
+        "case_id": case_id
+    })
+
+    dead_endpoints = []
+    for row in subscriptions:
+        try:
+            webpush(
+                subscription_info=json.loads(row["subscription_json"]),
+                data=payload,
+                vapid_private_key=str(VAPID_RUNTIME_PRIVATE_FILE),
+                vapid_claims={"sub": "mailto:act-doctor-call@example.com"},
+                timeout=10
+            )
+        except WebPushException as exc:
+            code = getattr(getattr(exc, "response", None), "status_code", None)
+            if code in (404, 410):
+                dead_endpoints.append(row["endpoint"])
+        except Exception as exc:
+            print("Doctor Call push error:", exc)
+
+    if dead_endpoints:
+        conn = get_db()
+        for endpoint in dead_endpoints:
+            conn.execute(
+                "DELETE FROM push_subscriptions WHERE endpoint = ?",
+                (endpoint,)
+            )
+        conn.commit()
+        conn.close()
+
+
+# =========================
+# DOCTOR CALL ROUTES
+# =========================
+
+@app.route("/doctor-call")
+@login_required
+def doctor_call_insurance():
+    if session.get("role") == "doctor":
+        return redirect(url_for("doctor_call_doctor"))
+    if session.get("role") not in ("insurance", "admin"):
+        return redirect(url_for("home"))
+
+    conn = get_db()
+    doctors = conn.execute("""
+        SELECT u.username, u.display_name, p.specialty
+        FROM users u
+        JOIN doctor_profiles p ON p.username = u.username
+        WHERE u.role = 'doctor' AND p.active = 1
+        ORDER BY p.specialty, u.display_name
+    """).fetchall()
+    rows = conn.execute("""
+        SELECT c.*, u.display_name AS doctor_display
+        FROM doctor_cases c
+        LEFT JOIN users u ON u.username = c.doctor_username
+        ORDER BY c.id DESC
+        LIMIT 200
+    """).fetchall()
+    conn.close()
+
+    specialties = sorted({d["specialty"] for d in doctors})
+    return render_template_string(
+        DOCTOR_CALL_INSURANCE_HTML,
+        doctors=doctors,
+        specialties=specialties,
+        cases=rows,
+        message=request.args.get("message"),
+        role=session.get("role")
+    )
+
+
+@app.route("/doctor-call/new", methods=["POST"])
+@login_required
+def doctor_call_new():
+    if session.get("role") not in ("insurance", "admin"):
+        return redirect(landing_url())
+
+    case_no = request.form.get("case_no", "").strip()
+    patient_ref = request.form.get("patient_ref", "").strip()
+    specialty = request.form.get("specialty", "").strip()
+    doctor_username = request.form.get("doctor_username", "").strip()
+    pdf = request.files.get("pdf")
+
+    if not case_no or not specialty or not doctor_username or not pdf:
+        return redirect(url_for(
+            "doctor_call_insurance",
+            message="Please complete all required fields."
+        ))
+    if not allowed_pdf(pdf.filename):
+        return redirect(url_for(
+            "doctor_call_insurance",
+            message="Only PDF files are allowed."
+        ))
+
+    conn = get_db()
+    profile = conn.execute("""
+        SELECT p.specialty
+        FROM users u
+        JOIN doctor_profiles p ON p.username = u.username
+        WHERE u.username = ? AND u.role = 'doctor' AND p.active = 1
+    """, (doctor_username,)).fetchone()
+
+    if not profile:
+        conn.close()
+        return redirect(url_for(
+            "doctor_call_insurance",
+            message="Selected doctor is not active."
+        ))
+
+    if profile["specialty"] != specialty:
+        conn.close()
+        return redirect(url_for(
+            "doctor_call_insurance",
+            message="Doctor and specialty do not match."
+        ))
+
+    safe_name = secure_filename(pdf.filename) or "case.pdf"
+    stamped = f"{int(datetime.now().timestamp())}_{safe_name}"
+    pdf_bytes = pdf.read()
+    if not pdf_bytes:
+        conn.close()
+        return redirect(url_for(
+            "doctor_call_insurance",
+            message="The PDF file is empty."
+        ))
+
+    if USE_POSTGRES:
+        cur = conn.execute("""
+            INSERT INTO doctor_cases
+            (case_no, patient_ref, specialty, doctor_username,
+             pdf_filename, pdf_original_name, pdf_data, status, sent_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'Sent', ?)
+            RETURNING id
+        """, (
+            case_no, patient_ref, specialty, doctor_username,
+            stamped, safe_name, pdf_bytes, now_text()
+        ))
+        case_id = cur.fetchone()["id"]
+    else:
+        cur = conn.execute("""
+            INSERT INTO doctor_cases
+            (case_no, patient_ref, specialty, doctor_username,
+             pdf_filename, pdf_original_name, pdf_data, status, sent_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'Sent', ?)
+        """, (
+            case_no, patient_ref, specialty, doctor_username,
+            stamped, safe_name, pdf_bytes, now_text()
+        ))
+        case_id = cur.lastrowid
+
+    conn.commit()
+    conn.close()
+
+    send_case_push(case_id, case_no, specialty, doctor_username)
+    return redirect(url_for(
+        "doctor_call_insurance",
+        message="Case sent to doctor successfully."
+    ))
+
+
+@app.route("/doctor-call/doctor")
+@login_required
+def doctor_call_doctor():
+    if session.get("role") != "doctor":
+        return redirect(url_for("doctor_call_insurance"))
+
+    conn = get_db()
+    cases = conn.execute("""
+        SELECT * FROM doctor_cases
+        WHERE doctor_username = ?
+        ORDER BY
+            CASE WHEN status='Sent' THEN 0
+                 WHEN status='Opened' THEN 1
+                 ELSE 2 END,
+            id DESC
+    """, (session["username"],)).fetchall()
+    profile = conn.execute(
+        "SELECT specialty FROM doctor_profiles WHERE username = ?",
+        (session["username"],)
+    ).fetchone()
+    conn.close()
+
+    return render_template_string(
+        DOCTOR_CALL_DOCTOR_HTML,
+        cases=cases,
+        display_name=session.get("display", session["username"]),
+        doctor_specialty=(profile["specialty"] if profile else "Doctor"),
+        vapid_public_key=ensure_vapid_keys()
+    )
+
+
+@app.route("/doctor-call/case/<int:case_id>")
+@login_required
+def doctor_call_case(case_id):
+    conn = get_db()
+    case = conn.execute(
+        "SELECT * FROM doctor_cases WHERE id = ?",
+        (case_id,)
+    ).fetchone()
+
+    if not case:
+        conn.close()
+        return "Case not found", 404
+
+    role = session.get("role")
+    if role == "doctor":
+        if case["doctor_username"] != session.get("username"):
+            conn.close()
+            return "Not authorized", 403
+        if not case["opened_at"]:
+            conn.execute("""
+                UPDATE doctor_cases
+                SET status='Opened', opened_at=?
+                WHERE id=?
+            """, (now_text(), case_id))
+            conn.commit()
+            case = conn.execute(
+                "SELECT * FROM doctor_cases WHERE id = ?",
+                (case_id,)
+            ).fetchone()
+    elif role not in ("insurance", "admin"):
+        conn.close()
+        return redirect(url_for("home"))
+
+    doctor_name_row = conn.execute(
+        "SELECT display_name FROM users WHERE username = ?",
+        (case["doctor_username"],)
+    ).fetchone()
+    conn.close()
+
+    return render_template_string(
+        DOCTOR_CALL_CASE_HTML,
+        case=case,
+        role=role,
+        doctor_name=(
+            doctor_name_row["display_name"]
+            if doctor_name_row
+            else case["doctor_username"]
+        )
+    )
+
+
+@app.route(
+    "/doctor-call/case/<int:case_id>/decision/<decision>",
+    methods=["POST"]
+)
+@login_required
+def doctor_call_decision(case_id, decision):
+    if session.get("role") != "doctor":
+        return redirect(landing_url())
+    if decision not in ("Accepted", "Rejected"):
+        return "Invalid decision", 400
+
+    conn = get_db()
+    case = conn.execute(
+        "SELECT doctor_username FROM doctor_cases WHERE id = ?",
+        (case_id,)
+    ).fetchone()
+    if not case or case["doctor_username"] != session.get("username"):
+        conn.close()
+        return "Not authorized", 403
+
+    conn.execute("""
+        UPDATE doctor_cases
+        SET status=?, decision=?, decided_at=?
+        WHERE id=?
+    """, (decision, decision, now_text(), case_id))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("doctor_call_doctor"))
+
+
+@app.route("/doctor-call/api/push/subscribe", methods=["POST"])
+@login_required
+def doctor_call_push_subscribe():
+    if session.get("role") != "doctor":
+        return jsonify({"ok": False, "error": "Unauthorized"}), 401
+
+    subscription = request.get_json(silent=True)
+    if not subscription or "endpoint" not in subscription:
+        return jsonify({"ok": False, "error": "Invalid subscription"}), 400
+
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO push_subscriptions
+        (username, endpoint, subscription_json, created_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT (endpoint) DO UPDATE SET
+            username = excluded.username,
+            subscription_json = excluded.subscription_json,
+            created_at = excluded.created_at
+    """, (
+        session["username"],
+        subscription["endpoint"],
+        json.dumps(subscription),
+        now_text()
+    ))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/doctor-call/case/<int:case_id>/pdf")
+@login_required
+def doctor_call_pdf(case_id):
+    role = session.get("role")
+    conn = get_db()
+    case = conn.execute(
+        "SELECT doctor_username, pdf_filename, pdf_original_name, pdf_data FROM doctor_cases WHERE id = ?",
+        (case_id,)
+    ).fetchone()
+    conn.close()
+
+    if not case:
+        return "File not found", 404
+    if role == "doctor" and case["doctor_username"] != session.get("username"):
+        return "Not authorized", 403
+    if role not in ("doctor", "insurance", "admin"):
+        return "Not authorized", 403
+
+    if case["pdf_data"]:
+        return send_file(
+            io.BytesIO(bytes(case["pdf_data"])),
+            mimetype="application/pdf",
+            download_name=case["pdf_original_name"] or "case.pdf",
+            as_attachment=False
+        )
+
+    legacy_path = UPLOAD_FOLDER / case["pdf_filename"]
+    if legacy_path.exists():
+        return send_from_directory(UPLOAD_FOLDER, case["pdf_filename"])
+    return "PDF is unavailable", 404
+
+
+@app.route("/doctor-call/uploads/<path:filename>")
+@login_required
+def doctor_call_upload(filename):
+    role = session.get("role")
+    conn = get_db()
+    case = conn.execute(
+        "SELECT doctor_username FROM doctor_cases WHERE pdf_filename = ?",
+        (filename,)
+    ).fetchone()
+    conn.close()
+
+    if not case:
+        return "File not found", 404
+
+    if role == "doctor" and case["doctor_username"] != session.get("username"):
+        return "Not authorized", 403
+    if role not in ("doctor", "insurance", "admin"):
+        return "Not authorized", 403
+
+    return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
+
+
+# =========================
+# DOCTOR ADMIN
+# =========================
+
+@app.route("/doctor-call/admin/doctors")
+@login_required
+def doctor_call_admin_doctors():
+    if session.get("role") != "admin":
+        return redirect(url_for("doctor_call_insurance"))
+
+    conn = get_db()
+    doctors = conn.execute("""
+        SELECT u.username, u.display_name, p.specialty, p.active
+        FROM users u
+        JOIN doctor_profiles p ON p.username = u.username
+        WHERE u.role = 'doctor'
+        ORDER BY p.specialty, u.display_name
+    """).fetchall()
+    conn.close()
+
+    return render_template_string(
+        DOCTOR_CALL_ADMIN_HTML,
+        doctors=doctors,
+        message=request.args.get("message")
+    )
+
+
+@app.route("/doctor-call/admin/doctors/add", methods=["POST"])
+@login_required
+def doctor_call_admin_add_doctor():
+    if session.get("role") != "admin":
+        return redirect(landing_url())
+
+    username = request.form.get("username", "").strip().lower()
+    display_name = request.form.get("display_name", "").strip()
+    specialty = request.form.get("specialty", "").strip()
+    password = request.form.get("password", "").strip()
+
+    if not username or not display_name or not specialty or len(password) < 6:
+        return redirect(url_for(
+            "doctor_call_admin_doctors",
+            message="Complete all fields. Password must be at least 6 characters."
+        ))
+
+    conn = get_db()
+    existing = conn.execute(
+        "SELECT username FROM users WHERE username = ?",
+        (username,)
+    ).fetchone()
+
+    if existing:
+        conn.close()
+        return redirect(url_for(
+            "doctor_call_admin_doctors",
+            message="Username already exists."
+        ))
+
+    conn.execute("""
+        INSERT INTO users
+        (username, password_hash, role, display_name, updated_at)
+        VALUES (?, ?, 'doctor', ?, ?)
+    """, (
+        username,
+        generate_password_hash(password),
+        display_name,
+        now_text()
+    ))
+    conn.execute("""
+        INSERT INTO doctor_profiles (username, specialty, active)
+        VALUES (?, ?, 1)
+    """, (username, specialty))
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for(
+        "doctor_call_admin_doctors",
+        message="Doctor account added successfully."
+    ))
+
+
+@app.route("/doctor-call/admin/doctors/<username>/edit", methods=["POST"])
+@login_required
+def doctor_call_admin_edit_doctor(username):
+    if session.get("role") != "admin":
+        return redirect(landing_url())
+
+    display_name = request.form.get("display_name", "").strip()
+    specialty = request.form.get("specialty", "").strip()
+    new_password = request.form.get("new_password", "").strip()
+
+    if not display_name or not specialty:
+        return redirect(url_for(
+            "doctor_call_admin_doctors",
+            message="Display name and specialty are required."
+        ))
+    if new_password and len(new_password) < 6:
+        return redirect(url_for(
+            "doctor_call_admin_doctors",
+            message="New password must be at least 6 characters."
+        ))
+
+    conn = get_db()
+    user = conn.execute(
+        "SELECT username FROM users WHERE username = ? AND role = 'doctor'",
+        (username,)
+    ).fetchone()
+    if not user:
+        conn.close()
+        return redirect(url_for(
+            "doctor_call_admin_doctors",
+            message="Doctor account not found."
+        ))
+
+    conn.execute(
+        "UPDATE users SET display_name = ?, updated_at = ? WHERE username = ?",
+        (display_name, now_text(), username)
+    )
+    conn.execute(
+        "UPDATE doctor_profiles SET specialty = ? WHERE username = ?",
+        (specialty, username)
+    )
+    if new_password:
+        conn.execute(
+            "UPDATE users SET password_hash = ?, updated_at = ? WHERE username = ?",
+            (generate_password_hash(new_password), now_text(), username)
+        )
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for(
+        "doctor_call_admin_doctors",
+        message="Doctor details updated successfully."
+    ))
+
+
+@app.route("/doctor-call/admin/doctors/<username>/toggle", methods=["POST"])
+@login_required
+def doctor_call_admin_toggle_doctor(username):
+    if session.get("role") != "admin":
+        return redirect(landing_url())
+
+    conn = get_db()
+    profile = conn.execute(
+        "SELECT active FROM doctor_profiles WHERE username = ?",
+        (username,)
+    ).fetchone()
+    if profile:
+        new_active = 0 if profile["active"] == 1 else 1
+        conn.execute(
+            "UPDATE doctor_profiles SET active = ? WHERE username = ?",
+            (new_active, username)
+        )
+        conn.commit()
+    conn.close()
+    return redirect(url_for("doctor_call_admin_doctors"))
+
+
+
+SW_JS_V31 = 'self.addEventListener("push", event => {\n  let data = {title:"ACT Doctor Call", body:"A new case is waiting for review.", url:"/doctor-call/doctor"};\n  if (event.data) { try { data = event.data.json(); } catch (e) { data.body = event.data.text(); } }\n  const options = {\n    body: data.body,\n    tag: "act-doctor-case-" + (data.case_id || "new"),\n    renotify: true,\n    requireInteraction: true,\n    silent: false,\n    vibrate: [900, 180, 900, 180, 900, 180, 1600],\n    data: {url: data.url || "/doctor-call/doctor"}\n  };\n  event.waitUntil(self.registration.showNotification(data.title || "ACT Doctor Call", options));\n});\nself.addEventListener("notificationclick", event => {\n  event.notification.close();\n  const target = (event.notification.data && event.notification.data.url) || "/doctor-call/doctor";\n  event.waitUntil(clients.matchAll({type:"window", includeUncontrolled:true}).then(ws => {\n    for (const c of ws) { if ("focus" in c) { c.navigate(target); return c.focus(); } }\n    if (clients.openWindow) return clients.openWindow(target);\n  }));\n});\n'
+MANIFEST_JSON_V31 = '{\n  "name": "ACT Operations",\n  "short_name": "ACT",\n  "start_url": "/modules",\n  "display": "standalone",\n  "background_color": "#f4f7fb",\n  "theme_color": "#1f6feb",\n  "description": "ACT BedFlow and Doctor Call integrated workflow"\n}'
+
+# =========================
+# WEB PUSH / PWA
+# =========================
+
+@app.route("/sw.js")
+def service_worker():
+    response = Response(SW_JS_V31, mimetype="application/javascript")
+    response.headers["Service-Worker-Allowed"] = "/"
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+@app.route("/manifest.json")
+def manifest_json():
+    return Response(MANIFEST_JSON_V31, mimetype="application/manifest+json")
+
+
+# =========================
+# START
+# =========================
+init_db()
+init_doctor_call_db()
+ensure_vapid_keys()
+if __name__ == "__main__":
+
+
+    app.run(
+        host="0.0.0.0",
+        port=5000,
+        debug=False
+    )
