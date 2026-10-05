@@ -226,7 +226,7 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
         <div style="grid-column:1/-1">
           <label>Medical report + attachments (PDF) *</label>
           <input type="file" name="pdfs" accept="application/pdf" multiple required>
-          <div class="help">You can select more than one PDF. Text PDFs and scanned-image PDFs are supported. OCR is limited to the first 12 image-only pages per upload in this beta.</div>
+          <div class="help">You can select more than one PDF. Text PDFs and scanned-image PDFs are supported. OCR is limited to the first 4 image-only pages per upload in this beta to keep the free Render instance stable.</div>
         </div>
       </div>
       <div style="margin-top:14px">
@@ -3048,7 +3048,7 @@ def normalize_text(value):
     return " ".join((value or "").lower().replace("\n", " ").split())
 
 
-OCR_MAX_PAGES = 12
+OCR_MAX_PAGES = 4
 OCR_MIN_PAGE_TEXT = 40
 _OCR_ENGINE = None
 
@@ -3095,7 +3095,7 @@ def ocr_pdf_pages(pdf_bytes, page_indices):
 
             page = document.load_page(page_index)
             pixmap = page.get_pixmap(
-                matrix=pymupdf.Matrix(1.8, 1.8),
+                matrix=pymupdf.Matrix(1.2, 1.2),
                 alpha=False
             )
 
@@ -3179,10 +3179,21 @@ def extract_and_merge_pdfs(files):
         for page_index, page in enumerate(reader.pages):
             total_pages += 1
 
+            # Avoid expensive pypdf text parsing on image-heavy/scanned pages.
+            # If a page contains images and very little structured text metadata,
+            # route it directly to OCR instead of risking a Gunicorn timeout.
+            page_text = ""
             try:
-                page_text = page.extract_text() or ""
+                resources = page.get("/Resources") or {}
+                has_xobject = bool(resources.get("/XObject"))
             except Exception:
-                page_text = ""
+                has_xobject = False
+
+            if not has_xobject:
+                try:
+                    page_text = page.extract_text() or ""
+                except Exception:
+                    page_text = ""
 
             page_text = page_text.strip()
             page_texts[page_index] = page_text
