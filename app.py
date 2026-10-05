@@ -156,7 +156,301 @@ MODULES_HTML_V31 = '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="ut
 
 DOCTOR_CALL_INSURANCE_HTML = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="20"><title>ACT Doctor Call</title><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1100px;margin:auto;padding:20px 16px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.brand h1{margin:0;font-size:27px}.sub{color:#6b7280;margin-top:4px}.top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.btn{display:inline-block;border:0;border-radius:10px;padding:11px 15px;font-weight:bold;text-decoration:none;cursor:pointer}.primary{background:#1f6feb;color:white}.success{background:#14804a;color:white}.danger{background:#c93c37;color:white}.light{background:white;border:1px solid #e5e7eb;color:#172033}.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 6px 18px rgba(0,0,0,.035)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}label{display:block;color:#6b7280;font-size:13px;margin-bottom:6px}input,select{width:100%;padding:12px;border:1px solid #d5dae2;border-radius:10px;background:white;font-size:15px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #e5e7eb;font-size:14px}th{color:#6b7280;font-size:12px;text-transform:uppercase}.badge{display:inline-block;padding:6px 9px;border-radius:999px;background:#e8eef8;font-weight:bold;font-size:12px}.small{color:#6b7280;font-size:13px}.notice{background:#e9f8ef;border:1px solid #9bd6ad;color:#176b36;padding:11px;border-radius:10px;margin-bottom:14px}.actions{display:flex;gap:10px;flex-wrap:wrap}iframe{width:100%;height:72vh;border:1px solid #e5e7eb;border-radius:12px}.module-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}@media(max-width:700px){.grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}table{display:block;overflow-x:auto;white-space:nowrap}}</style></head><body><div class="wrap">\n<div class="topbar"><div class="brand"><h1>ACT Doctor Call</h1><div class="sub">Insurance · Doctor Case Review</div></div><div class="top-actions"><a class="btn light" href="/modules">Apps</a><a class="btn light" href="/">BedFlow</a>{% if role == \'admin\' %}<a class="btn light" href="/doctor-call/admin/doctors">Doctors</a>{% endif %}<a class="btn light" href="/logout">Logout</a></div></div>\n{% if message %}<div class="notice">{{ message }}</div>{% endif %}\n<div class="card"><h2 style="margin-top:0">Send New Case</h2><form method="post" action="/doctor-call/new" enctype="multipart/form-data"><div class="grid"><div><label>Case No. *</label><input name="case_no" required></div><div><label>Patient Ref.</label><input name="patient_ref" placeholder="Demo reference only"></div><div><label>Specialty *</label><select id="specialty" name="specialty" required><option value="">Choose specialty</option>{% for specialty in specialties %}<option value="{{ specialty }}">{{ specialty }}</option>{% endfor %}</select></div><div><label>Doctor *</label><select id="doctor" name="doctor_username" required><option value="">Choose doctor</option>{% for d in doctors %}<option value="{{ d[\'username\'] }}" data-specialty="{{ d[\'specialty\'] }}">{{ d[\'display_name\'] }} — {{ d[\'specialty\'] }}</option>{% endfor %}</select></div><div style="grid-column:1/-1"><label>Medical File PDF *</label><input type="file" name="pdf" accept="application/pdf" required></div></div><div style="margin-top:14px"><button class="btn primary">Send to Doctor 🔔</button></div></form></div>\n<div class="card"><h2 style="margin-top:0">Cases</h2><table><thead><tr><th>Case</th><th>Specialty</th><th>Doctor</th><th>Status</th><th>Sent</th><th>Opened</th><th>Decision</th><th></th></tr></thead><tbody>{% for c in cases %}<tr><td>{{ c[\'case_no\'] }}</td><td>{{ c[\'specialty\'] }}</td><td>{{ c[\'doctor_display\'] or c[\'doctor_username\'] }}</td><td><span class="badge">{{ c[\'status\'] }}</span></td><td>{{ c[\'sent_at\'] }}</td><td>{{ c[\'opened_at\'] or \'-\' }}</td><td>{{ c[\'decided_at\'] or \'-\' }}</td><td><a class="btn light" href="/doctor-call/case/{{ c[\'id\'] }}">View</a></td></tr>{% else %}<tr><td colspan="8" class="small">No cases yet.</td></tr>{% endfor %}</tbody></table></div></div>\n<script>const specialty=document.getElementById(\'specialty\'),doctor=document.getElementById(\'doctor\');function filterDoctors(){const s=specialty.value;doctor.value=\'\';[...doctor.options].forEach((o,i)=>{if(i===0)return;o.hidden=!!s&&o.dataset.specialty!==s;});}specialty.addEventListener(\'change\',filterDoctors);</script></body></html>'
 
-DOCTOR_CALL_DOCTOR_HTML = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="30"><link rel="manifest" href="/manifest.json"><title>Doctor Inbox</title><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1100px;margin:auto;padding:20px 16px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.brand h1{margin:0;font-size:27px}.sub{color:#6b7280;margin-top:4px}.top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.btn{display:inline-block;border:0;border-radius:10px;padding:11px 15px;font-weight:bold;text-decoration:none;cursor:pointer}.primary{background:#1f6feb;color:white}.success{background:#14804a;color:white}.danger{background:#c93c37;color:white}.light{background:white;border:1px solid #e5e7eb;color:#172033}.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 6px 18px rgba(0,0,0,.035)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}label{display:block;color:#6b7280;font-size:13px;margin-bottom:6px}input,select{width:100%;padding:12px;border:1px solid #d5dae2;border-radius:10px;background:white;font-size:15px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #e5e7eb;font-size:14px}th{color:#6b7280;font-size:12px;text-transform:uppercase}.badge{display:inline-block;padding:6px 9px;border-radius:999px;background:#e8eef8;font-weight:bold;font-size:12px}.small{color:#6b7280;font-size:13px}.notice{background:#e9f8ef;border:1px solid #9bd6ad;color:#176b36;padding:11px;border-radius:10px;margin-bottom:14px}.actions{display:flex;gap:10px;flex-wrap:wrap}iframe{width:100%;height:72vh;border:1px solid #e5e7eb;border-radius:12px}.module-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}@media(max-width:700px){.grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}table{display:block;overflow-x:auto;white-space:nowrap}}</style></head><body><div class="wrap"><div class="topbar"><div class="brand"><h1>ACT Doctor Call</h1><div class="sub">{{ display_name }} · {{ doctor_specialty }}</div></div><div class="top-actions"><a class="btn light" href="/logout">Logout</a></div></div>\n<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><h2 style="margin:0 0 6px">Phone Notifications 🔔</h2><div id="notificationStatus" class="small">Checking notification status...</div></div><button id="enableNotifications" class="btn primary" type="button">Enable Notifications</button></div></div>\n<div class="card"><h2 style="margin-top:0">Doctor Inbox</h2><table><thead><tr><th>Case</th><th>Specialty</th><th>Status</th><th>Sent</th><th></th></tr></thead><tbody>{% for c in cases %}<tr><td>{{ c[\'case_no\'] }}</td><td>{{ c[\'specialty\'] }}</td><td><span class="badge">{{ c[\'status\'] }}</span></td><td>{{ c[\'sent_at\'] }}</td><td><a class="btn primary" href="/doctor-call/case/{{ c[\'id\'] }}">Open Case</a></td></tr>{% else %}<tr><td colspan="5" class="small">No cases assigned to you.</td></tr>{% endfor %}</tbody></table></div></div>\n<script>const VAPID_PUBLIC_KEY="{{ vapid_public_key }}";function b64arr(s){const p="=".repeat((4-s.length%4)%4);const b=(s+p).replace(/-/g,"+").replace(/_/g,"/");const r=atob(b);return Uint8Array.from([...r].map(c=>c.charCodeAt(0)));}function setStatus(m,e=false){const st=document.getElementById(\'notificationStatus\'),bt=document.getElementById(\'enableNotifications\');st.textContent=m;if(e){bt.textContent=\'Notifications Enabled ✅\';bt.disabled=true;bt.className=\'btn success\';}}async function registerPush(){if(!(\'serviceWorker\'in navigator)||!(\'PushManager\'in window)){setStatus(\'Push notifications are not supported on this browser.\');return;}const perm=await Notification.requestPermission();if(perm!==\'granted\'){setStatus(\'Notification permission was not granted.\');return;}const reg=await navigator.serviceWorker.register(\'/sw.js\');let sub=await reg.pushManager.getSubscription();if(!sub){sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64arr(VAPID_PUBLIC_KEY)});}const resp=await fetch(\'/doctor-call/api/push/subscribe\',{method:\'POST\',headers:{\'Content-Type\':\'application/json\'},body:JSON.stringify(sub)});const data=await resp.json();if(data.ok)setStatus(\'This device is registered for new case notifications.\',true);else setStatus(\'Could not register this device.\');}document.getElementById(\'enableNotifications\').addEventListener(\'click\',registerPush);window.addEventListener(\'load\',async()=>{try{if(!(\'serviceWorker\'in navigator)||!(\'PushManager\'in window)){setStatus(\'Push notifications are not supported on this browser.\');return;}const reg=await navigator.serviceWorker.register(\'/sw.js\');const sub=await reg.pushManager.getSubscription();if(sub&&Notification.permission===\'granted\'){const resp=await fetch(\'/doctor-call/api/push/subscribe\',{method:\'POST\',headers:{\'Content-Type\':\'application/json\'},body:JSON.stringify(sub)});const data=await resp.json();if(data.ok){setStatus(\'This device is registered for new case notifications.\',true);return;}}if(Notification.permission===\'denied\')setStatus(\'Notifications are blocked in browser settings.\');else setStatus(\'Tap Enable Notifications on this phone.\');}catch(e){console.error(e);setStatus(\'Notification setup requires HTTPS.\');}});</script></body></html>'
+DOCTOR_CALL_DOCTOR_HTML = """
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="60">
+<link rel="manifest" href="/manifest.json">
+<title>ACT Doctor Call</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
+.wrap{max-width:1100px;margin:auto;padding:20px 16px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}
+.brand h1{margin:0;font-size:27px}.sub{color:#6b7280;margin-top:4px}
+.top-actions,.notification-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{display:inline-block;border:0;border-radius:10px;padding:11px 15px;font-weight:bold;text-decoration:none;cursor:pointer}
+.primary{background:#1f6feb;color:white}.success{background:#14804a;color:white}.light{background:white;border:1px solid #e5e7eb;color:#172033}
+.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 6px 18px rgba(0,0,0,.035)}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #e5e7eb;font-size:14px}
+th{color:#6b7280;font-size:12px;text-transform:uppercase}.badge{display:inline-block;padding:6px 9px;border-radius:999px;background:#e8eef8;font-weight:bold;font-size:12px}
+.small{color:#6b7280;font-size:13px}.notice{display:none;background:#fff3cd;border:1px solid #f1c453;color:#6d5200;padding:14px;border-radius:12px;margin-bottom:16px}
+.notice.show{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+@media(max-width:700px){.topbar{align-items:flex-start;flex-direction:column}table{display:block;overflow-x:auto;white-space:nowrap}.notification-actions{width:100%}.notification-actions .btn{flex:1}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1>ACT Doctor Call</h1>
+      <div class="sub">{{ display_name }} · {{ doctor_specialty }}</div>
+    </div>
+    <div class="top-actions"><a class="btn light" href="/logout">Logout</a></div>
+  </div>
+
+  <div id="newCaseBanner" class="notice">
+    <div>
+      <strong>🔔 New case received</strong>
+      <div id="newCaseText" class="small" style="margin-top:4px"></div>
+    </div>
+    <a id="newCaseLink" class="btn primary" href="/doctor-call/doctor">Open Case</a>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div>
+        <h2 style="margin:0 0 6px">Phone Notifications 🔔</h2>
+        <div id="notificationStatus" class="small">Checking notification status...</div>
+      </div>
+      <div class="notification-actions">
+        <button id="enableNotifications" class="btn primary" type="button">Enable Notifications</button>
+        <button id="testNotification" class="btn light" type="button">Test Notification</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Doctor Inbox</h2>
+    <table>
+      <thead><tr><th>Case</th><th>Specialty</th><th>Status</th><th>Sent</th><th></th></tr></thead>
+      <tbody>
+      {% for c in cases %}
+        <tr>
+          <td>{{ c['case_no'] }}</td>
+          <td>{{ c['specialty'] }}</td>
+          <td><span class="badge">{{ c['status'] }}</span></td>
+          <td>{{ c['sent_at'] }}</td>
+          <td><a class="btn primary" href="/doctor-call/case/{{ c['id'] }}">Open Case</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="small">No cases assigned to you.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const VAPID_PUBLIC_KEY = "{{ vapid_public_key }}";
+let latestCaseId = Number("{{ latest_case_id }}") || 0;
+let audioContext = null;
+
+function b64arr(s){
+  const p="=".repeat((4-s.length%4)%4);
+  const b=(s+p).replace(/-/g,"+").replace(/_/g,"/");
+  const r=atob(b);
+  return Uint8Array.from([...r].map(c=>c.charCodeAt(0)));
+}
+
+function setStatus(message, enabled=false){
+  const st=document.getElementById("notificationStatus");
+  const bt=document.getElementById("enableNotifications");
+  st.textContent=message;
+  if(enabled){
+    bt.textContent="Notifications Enabled ✅";
+    bt.className="btn success";
+  } else {
+    bt.textContent="Enable Notifications";
+    bt.className="btn primary";
+    bt.disabled=false;
+  }
+}
+
+function ensureAudio(){
+  try{
+    if(!audioContext){
+      const AC=window.AudioContext||window.webkitAudioContext;
+      if(AC) audioContext=new AC();
+    }
+    if(audioContext && audioContext.state==="suspended") audioContext.resume();
+  }catch(e){console.warn("Audio init failed",e);}
+}
+
+function playDoctorAlert(){
+  ensureAudio();
+  try{
+    if(audioContext){
+      const now=audioContext.currentTime;
+      [0,0.75,1.5].forEach((offset,i)=>{
+        const osc=audioContext.createOscillator();
+        const gain=audioContext.createGain();
+        osc.type="sine";
+        osc.frequency.value=i===2?980:820;
+        gain.gain.setValueAtTime(0.0001,now+offset);
+        gain.gain.exponentialRampToValueAtTime(0.22,now+offset+0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001,now+offset+0.55);
+        osc.connect(gain); gain.connect(audioContext.destination);
+        osc.start(now+offset); osc.stop(now+offset+0.6);
+      });
+    }
+  }catch(e){console.warn("Alert tone failed",e);}
+
+  if("vibrate" in navigator){
+    navigator.vibrate([900,180,900,180,900,180,1600]);
+  }
+
+  try{
+    if("speechSynthesis" in window){
+      window.speechSynthesis.cancel();
+      const msg=new SpeechSynthesisUtterance("There is a case for review");
+      msg.lang="en-US";
+      msg.rate=0.9;
+      msg.volume=1;
+      window.speechSynthesis.speak(msg);
+    }
+  }catch(e){console.warn("Speech alert failed",e);}
+}
+
+function showNewCase(caseData){
+  if(!caseData) return;
+  latestCaseId=Math.max(latestCaseId,Number(caseData.id)||0);
+  document.getElementById("newCaseText").textContent =
+    (caseData.specialty || "Doctor") + " · Case " + (caseData.case_no || "");
+  document.getElementById("newCaseLink").href =
+    caseData.url || ("/doctor-call/case/" + caseData.id);
+  document.getElementById("newCaseBanner").classList.add("show");
+  if(document.visibilityState==="visible") playDoctorAlert();
+}
+
+async function saveSubscription(sub){
+  const resp=await fetch("/doctor-call/api/push/subscribe",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(sub)
+  });
+  return await resp.json();
+}
+
+async function registerPush(){
+  ensureAudio();
+
+  if(!("serviceWorker" in navigator)||!("PushManager" in window)){
+    setStatus("Push notifications are not supported on this browser.");
+    return false;
+  }
+
+  const perm=await Notification.requestPermission();
+  if(perm!=="granted"){
+    setStatus("Notification permission was not granted.");
+    return false;
+  }
+
+  const reg=await navigator.serviceWorker.register("/sw.js");
+  let sub=await reg.pushManager.getSubscription();
+
+  if(!sub){
+    sub=await reg.pushManager.subscribe({
+      userVisibleOnly:true,
+      applicationServerKey:b64arr(VAPID_PUBLIC_KEY)
+    });
+  }
+
+  const data=await saveSubscription(sub);
+  if(data.ok){
+    setStatus("Notifications active on "+data.devices+" device(s).",true);
+    return true;
+  }
+
+  setStatus("Could not register this device.");
+  return false;
+}
+
+async function refreshPushStatus(){
+  try{
+    const resp=await fetch("/doctor-call/api/push/status",{cache:"no-store"});
+    const data=await resp.json();
+    if(data.ok && data.devices>0 && Notification.permission==="granted"){
+      setStatus("Notifications active on "+data.devices+" device(s).",true);
+    }
+  }catch(e){console.warn(e);}
+}
+
+async function testNotification(){
+  ensureAudio();
+  const ready=await registerPush();
+  if(!ready) return;
+
+  const btn=document.getElementById("testNotification");
+  const old=btn.textContent;
+  btn.disabled=true;
+  btn.textContent="Sending...";
+
+  try{
+    const resp=await fetch("/doctor-call/api/push/test",{method:"POST"});
+    const data=await resp.json();
+    if(data.ok){
+      setStatus("Test sent to "+data.sent+" of "+data.registered+" registered device(s).",true);
+      if(document.visibilityState==="visible") playDoctorAlert();
+    }else{
+      setStatus(data.error||"Could not send test notification.");
+    }
+  }catch(e){
+    setStatus("Could not send test notification.");
+  }finally{
+    btn.disabled=false;
+    btn.textContent=old;
+  }
+}
+
+async function checkLatestCase(){
+  try{
+    const resp=await fetch("/doctor-call/api/doctor/latest",{cache:"no-store"});
+    const data=await resp.json();
+    if(data.ok && data.case && Number(data.case.id)>latestCaseId){
+      showNewCase(data.case);
+    }
+  }catch(e){console.warn("Case polling error",e);}
+}
+
+document.getElementById("enableNotifications").addEventListener("click",registerPush);
+document.getElementById("testNotification").addEventListener("click",testNotification);
+
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.addEventListener("message",event=>{
+    const msg=event.data||{};
+    if(msg.type==="ACT_DOCTOR_CASE" && msg.data){
+      showNewCase(msg.data);
+    }
+  });
+}
+
+window.addEventListener("load",async()=>{
+  try{
+    if(!("serviceWorker" in navigator)||!("PushManager" in window)){
+      setStatus("Push notifications are not supported on this browser.");
+      return;
+    }
+
+    const reg=await navigator.serviceWorker.register("/sw.js");
+    const sub=await reg.pushManager.getSubscription();
+
+    if(sub && Notification.permission==="granted"){
+      const data=await saveSubscription(sub);
+      if(data.ok){
+        setStatus("Notifications active on "+data.devices+" device(s).",true);
+      }
+    }else if(Notification.permission==="denied"){
+      setStatus("Notifications are blocked in browser settings.");
+    }else{
+      setStatus("Tap Enable Notifications on this device.");
+    }
+
+    await refreshPushStatus();
+  }catch(e){
+    console.error(e);
+    setStatus("Notification setup requires HTTPS.");
+  }
+});
+
+setInterval(checkLatestCase,8000);
+</script>
+</body>
+</html>
+"""
 
 DOCTOR_CALL_CASE_HTML = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Case {{ case[\'case_no\'] }}</title><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1100px;margin:auto;padding:20px 16px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.brand h1{margin:0;font-size:27px}.sub{color:#6b7280;margin-top:4px}.top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.btn{display:inline-block;border:0;border-radius:10px;padding:11px 15px;font-weight:bold;text-decoration:none;cursor:pointer}.primary{background:#1f6feb;color:white}.success{background:#14804a;color:white}.danger{background:#c93c37;color:white}.light{background:white;border:1px solid #e5e7eb;color:#172033}.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 6px 18px rgba(0,0,0,.035)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}label{display:block;color:#6b7280;font-size:13px;margin-bottom:6px}input,select{width:100%;padding:12px;border:1px solid #d5dae2;border-radius:10px;background:white;font-size:15px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #e5e7eb;font-size:14px}th{color:#6b7280;font-size:12px;text-transform:uppercase}.badge{display:inline-block;padding:6px 9px;border-radius:999px;background:#e8eef8;font-weight:bold;font-size:12px}.small{color:#6b7280;font-size:13px}.notice{background:#e9f8ef;border:1px solid #9bd6ad;color:#176b36;padding:11px;border-radius:10px;margin-bottom:14px}.actions{display:flex;gap:10px;flex-wrap:wrap}iframe{width:100%;height:72vh;border:1px solid #e5e7eb;border-radius:12px}.module-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}@media(max-width:700px){.grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}table{display:block;overflow-x:auto;white-space:nowrap}}</style></head><body><div class="wrap"><div class="topbar"><div class="brand"><h1>Case {{ case[\'case_no\'] }}</h1><div class="sub">{{ case[\'specialty\'] }} · {{ doctor_name }} · {{ case[\'status\'] }}</div></div><div class="top-actions">{% if role == \'doctor\' %}<a class="btn light" href="/doctor-call/doctor">Inbox</a>{% else %}<a class="btn light" href="/doctor-call">Cases</a>{% endif %}</div></div>{% if role == \'doctor\' and case[\'status\'] not in [\'Accepted\',\'Rejected\'] %}<div class="card"><div class="actions"><form method="post" action="/doctor-call/case/{{ case[\'id\'] }}/decision/Accepted"><button class="btn success">Accept ✅</button></form><form method="post" action="/doctor-call/case/{{ case[\'id\'] }}/decision/Rejected"><button class="btn danger">Reject ❌</button></form></div></div>{% endif %}<div class="card"><iframe src="/doctor-call/case/{{ case[\'id\'] }}/pdf"></iframe></div></div></body></html>'
 
@@ -2488,37 +2782,35 @@ def allowed_pdf(filename):
     )
 
 
-def send_case_push(case_id, case_no, specialty, doctor_username):
+def send_push_payload(username, payload):
     ensure_vapid_keys()
     conn = get_db()
     subscriptions = conn.execute("""
         SELECT endpoint, subscription_json
         FROM push_subscriptions
         WHERE username = ?
-    """, (doctor_username,)).fetchall()
+    """, (username,)).fetchall()
     conn.close()
 
-    payload = json.dumps({
-        "title": "🔔 ACT Doctor Call — Review Required",
-        "body": f"{specialty} case {case_no} is waiting for review.",
-        "url": f"/doctor-call/case/{case_id}",
-        "case_id": case_id
-    })
-
     dead_endpoints = []
+    sent = 0
+
     for row in subscriptions:
         try:
             webpush(
                 subscription_info=json.loads(row["subscription_json"]),
-                data=payload,
+                data=json.dumps(payload),
                 vapid_private_key=str(VAPID_RUNTIME_PRIVATE_FILE),
                 vapid_claims={"sub": "mailto:act-doctor-call@example.com"},
                 timeout=10
             )
+            sent += 1
         except WebPushException as exc:
             code = getattr(getattr(exc, "response", None), "status_code", None)
             if code in (404, 410):
                 dead_endpoints.append(row["endpoint"])
+            else:
+                print("Doctor Call push error:", exc)
         except Exception as exc:
             print("Doctor Call push error:", exc)
 
@@ -2531,6 +2823,23 @@ def send_case_push(case_id, case_no, specialty, doctor_username):
             )
         conn.commit()
         conn.close()
+
+    return {
+        "registered": len(subscriptions),
+        "sent": sent
+    }
+
+
+def send_case_push(case_id, case_no, specialty, doctor_username):
+    payload = {
+        "title": "🔔 ACT Doctor Call — Review Required",
+        "body": f"{specialty} case {case_no} is waiting for review.",
+        "url": f"/doctor-call/case/{case_id}",
+        "case_id": case_id,
+        "case_no": case_no,
+        "specialty": specialty
+    }
+    return send_push_payload(doctor_username, payload)
 
 
 # =========================
@@ -2655,10 +2964,26 @@ def doctor_call_new():
     conn.commit()
     conn.close()
 
-    send_case_push(case_id, case_no, specialty, doctor_username)
+    push_result = send_case_push(
+        case_id,
+        case_no,
+        specialty,
+        doctor_username
+    )
+
+    if push_result["registered"] == 0:
+        message = (
+            "Case saved, but this doctor has no registered notification device yet."
+        )
+    else:
+        message = (
+            f"Case sent successfully. Notification delivered to "
+            f"{push_result['sent']} of {push_result['registered']} registered device(s)."
+        )
+
     return redirect(url_for(
         "doctor_call_insurance",
-        message="Case sent to doctor successfully."
+        message=message
     ))
 
 
@@ -2678,10 +3003,18 @@ def doctor_call_doctor():
                  ELSE 2 END,
             id DESC
     """, (session["username"],)).fetchall()
+
     profile = conn.execute(
         "SELECT specialty FROM doctor_profiles WHERE username = ?",
         (session["username"],)
     ).fetchone()
+
+    latest_row = conn.execute("""
+        SELECT COALESCE(MAX(id), 0) AS latest_id
+        FROM doctor_cases
+        WHERE doctor_username = ?
+    """, (session["username"],)).fetchone()
+
     conn.close()
 
     return render_template_string(
@@ -2689,8 +3022,92 @@ def doctor_call_doctor():
         cases=cases,
         display_name=session.get("display", session["username"]),
         doctor_specialty=(profile["specialty"] if profile else "Doctor"),
-        vapid_public_key=ensure_vapid_keys()
+        vapid_public_key=ensure_vapid_keys(),
+        latest_case_id=(latest_row["latest_id"] if latest_row else 0)
     )
+
+
+@app.route("/doctor-call/api/doctor/latest")
+@login_required
+def doctor_call_latest_case():
+    if session.get("role") != "doctor":
+        return jsonify({"ok": False, "error": "Unauthorized"}), 401
+
+    conn = get_db()
+    row = conn.execute("""
+        SELECT id, case_no, specialty, status, sent_at
+        FROM doctor_cases
+        WHERE doctor_username = ?
+        ORDER BY id DESC
+        LIMIT 1
+    """, (session["username"],)).fetchone()
+    conn.close()
+
+    if not row:
+        return jsonify({"ok": True, "case": None})
+
+    return jsonify({
+        "ok": True,
+        "case": {
+            "id": row["id"],
+            "case_no": row["case_no"],
+            "specialty": row["specialty"],
+            "status": row["status"],
+            "sent_at": row["sent_at"],
+            "url": f"/doctor-call/case/{row['id']}"
+        }
+    })
+
+
+@app.route("/doctor-call/api/push/status")
+@login_required
+def doctor_call_push_status():
+    if session.get("role") != "doctor":
+        return jsonify({"ok": False, "error": "Unauthorized"}), 401
+
+    conn = get_db()
+    row = conn.execute("""
+        SELECT COUNT(*) AS c
+        FROM push_subscriptions
+        WHERE username = ?
+    """, (session["username"],)).fetchone()
+    conn.close()
+
+    return jsonify({
+        "ok": True,
+        "devices": row["c"] if row else 0
+    })
+
+
+@app.route("/doctor-call/api/push/test", methods=["POST"])
+@login_required
+def doctor_call_push_test():
+    if session.get("role") != "doctor":
+        return jsonify({"ok": False, "error": "Unauthorized"}), 401
+
+    result = send_push_payload(
+        session["username"],
+        {
+            "title": "🔔 ACT Doctor Call — Test",
+            "body": "Notifications are working on this doctor account.",
+            "url": "/doctor-call/doctor",
+            "case_id": "test",
+            "case_no": "TEST",
+            "specialty": "Notification Test"
+        }
+    )
+
+    if result["registered"] == 0:
+        return jsonify({
+            "ok": False,
+            "error": "No notification device is registered for this doctor."
+        }), 400
+
+    return jsonify({
+        "ok": True,
+        "registered": result["registered"],
+        "sent": result["sent"]
+    })
 
 
 @app.route("/doctor-call/case/<int:case_id>")
@@ -2800,8 +3217,18 @@ def doctor_call_push_subscribe():
         now_text()
     ))
     conn.commit()
+
+    device_row = conn.execute("""
+        SELECT COUNT(*) AS c
+        FROM push_subscriptions
+        WHERE username = ?
+    """, (session["username"],)).fetchone()
+
     conn.close()
-    return jsonify({"ok": True})
+    return jsonify({
+        "ok": True,
+        "devices": device_row["c"] if device_row else 0
+    })
 
 
 @app.route("/doctor-call/case/<int:case_id>/pdf")
@@ -3016,7 +3443,70 @@ def doctor_call_admin_toggle_doctor(username):
 
 
 
-SW_JS_V31 = 'self.addEventListener("push", event => {\n  let data = {title:"ACT Doctor Call", body:"A new case is waiting for review.", url:"/doctor-call/doctor"};\n  if (event.data) { try { data = event.data.json(); } catch (e) { data.body = event.data.text(); } }\n  const options = {\n    body: data.body,\n    tag: "act-doctor-case-" + (data.case_id || "new"),\n    renotify: true,\n    requireInteraction: true,\n    silent: false,\n    vibrate: [900, 180, 900, 180, 900, 180, 1600],\n    data: {url: data.url || "/doctor-call/doctor"}\n  };\n  event.waitUntil(self.registration.showNotification(data.title || "ACT Doctor Call", options));\n});\nself.addEventListener("notificationclick", event => {\n  event.notification.close();\n  const target = (event.notification.data && event.notification.data.url) || "/doctor-call/doctor";\n  event.waitUntil(clients.matchAll({type:"window", includeUncontrolled:true}).then(ws => {\n    for (const c of ws) { if ("focus" in c) { c.navigate(target); return c.focus(); } }\n    if (clients.openWindow) return clients.openWindow(target);\n  }));\n});\n'
+SW_JS_V31 = r'''
+self.addEventListener("push", event => {
+  let data = {
+    title: "ACT Doctor Call",
+    body: "A new case is waiting for review.",
+    url: "/doctor-call/doctor"
+  };
+
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data.body = event.data.text();
+    }
+  }
+
+  event.waitUntil(
+    clients.matchAll({type: "window", includeUncontrolled: true}).then(windows => {
+      const visibleClient = windows.find(c => c.visibilityState === "visible");
+
+      if (visibleClient) {
+        visibleClient.postMessage({type: "ACT_DOCTOR_CASE", data});
+        return;
+      }
+
+      const options = {
+        body: data.body,
+        tag: "act-doctor-case-" + (data.case_id || "new"),
+        renotify: true,
+        requireInteraction: true,
+        silent: false,
+        vibrate: [900, 180, 900, 180, 900, 180, 1600],
+        data: {url: data.url || "/doctor-call/doctor"}
+      };
+
+      return self.registration.showNotification(
+        data.title || "ACT Doctor Call",
+        options
+      );
+    })
+  );
+});
+
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  const target =
+    (event.notification.data && event.notification.data.url)
+    || "/doctor-call/doctor";
+
+  event.waitUntil(
+    clients.matchAll({type: "window", includeUncontrolled: true}).then(windows => {
+      for (const client of windows) {
+        if ("focus" in client) {
+          client.navigate(target);
+          return client.focus();
+        }
+      }
+
+      if (clients.openWindow) return clients.openWindow(target);
+    })
+  );
+});
+'''
+
 MANIFEST_JSON_V31 = '{\n  "name": "ACT Operations",\n  "short_name": "ACT",\n  "start_url": "/modules",\n  "display": "standalone",\n  "background_color": "#f4f7fb",\n  "theme_color": "#1f6feb",\n  "description": "ACT BedFlow and Doctor Call integrated workflow"\n}'
 
 # =========================
