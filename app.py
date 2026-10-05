@@ -371,8 +371,7 @@ async function refreshPushStatus(){
 
 async function testNotification(){
   ensureAudio();
-  let ready=Notification.permission==="granted";
-  if(!ready) ready=await registerPush();
+  const ready=await registerPush();
   if(!ready) return;
 
   const btn=document.getElementById("testNotification");
