@@ -20,6 +20,7 @@ from werkzeug.utils import secure_filename
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization
 from pywebpush import webpush, WebPushException
+from pypdf import PdfReader, PdfWriter
 
 app = Flask(__name__)
 app.secret_key = os.environ.get(
@@ -154,7 +155,152 @@ def now_text():
 
 MODULES_HTML_V31 = '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">\n<title>ACT Operations</title>\n<style>\n*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:980px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:24px}.brand h1{margin:0;font-size:30px}.sub{color:#6b7280;margin-top:5px}.user{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:bold}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.card{display:block;text-decoration:none;color:#172033;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:24px;box-shadow:0 8px 24px rgba(23,32,51,.05)}.icon{font-size:36px}.title{font-size:22px;font-weight:800;margin:12px 0 6px}.desc{color:#6b7280;line-height:1.5}.metric{margin-top:18px;padding-top:14px;border-top:1px solid #eef1f5;font-weight:800}.go{margin-top:8px;color:#1f6feb;font-weight:800}.footer{margin-top:22px;display:flex;gap:10px;flex-wrap:wrap}.btn{padding:10px 13px;border-radius:10px;background:#fff;border:1px solid #e5e7eb;color:#172033;text-decoration:none;font-weight:bold;font-size:13px}.role{color:#6b7280;font-size:12px;margin-top:3px}@media(max-width:700px){.wrap{padding:18px 16px}.grid{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}.user{width:100%}}\n</style></head>\n<body><div class="wrap">\n<div class="top"><div class="brand"><h1>ACT Operations</h1><div class="sub">BedFlow + Doctor Call</div><div class="role">Signed in as {{ role|upper }}</div></div><div class="user">👤 {{ display_name }}</div></div>\n<div class="grid">\n{% if show_bedflow %}<a class="card" href="/"><div class="icon">🛏️</div><div class="title">ACT BedFlow</div><div class="desc">ICU bed availability, confirmation and live status tracking.</div><div class="metric">{{ available_beds }} beds available now</div><div class="go">Open BedFlow →</div></a>{% endif %}\n{% if show_doctor_call %}<a class="card" href="{% if role == \'doctor\' %}/doctor-call/doctor{% else %}/doctor-call{% endif %}"><div class="icon">🔔</div><div class="title">ACT Doctor Call</div><div class="desc">Case PDF review, doctor-specific notifications and Accept / Reject workflow.</div><div class="metric">{{ pending_cases }} cases awaiting action</div><div class="go">Open Doctor Call →</div></a>{% endif %}\n</div>\n<div class="footer"><a class="btn" href="/change-password">Change Password</a>{% if role == \'admin\' %}<a class="btn" href="/doctor-call/admin/doctors">Manage Doctors</a>{% endif %}<a class="btn" href="/logout">Sign Out</a></div>\n</div></body></html>'
 
-DOCTOR_CALL_INSURANCE_HTML = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="20"><title>ACT Doctor Call</title><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1100px;margin:auto;padding:20px 16px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.brand h1{margin:0;font-size:27px}.sub{color:#6b7280;margin-top:4px}.top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.btn{display:inline-block;border:0;border-radius:10px;padding:11px 15px;font-weight:bold;text-decoration:none;cursor:pointer}.primary{background:#1f6feb;color:white}.success{background:#14804a;color:white}.danger{background:#c93c37;color:white}.light{background:white;border:1px solid #e5e7eb;color:#172033}.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 6px 18px rgba(0,0,0,.035)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}label{display:block;color:#6b7280;font-size:13px;margin-bottom:6px}input,select{width:100%;padding:12px;border:1px solid #d5dae2;border-radius:10px;background:white;font-size:15px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #e5e7eb;font-size:14px}th{color:#6b7280;font-size:12px;text-transform:uppercase}.badge{display:inline-block;padding:6px 9px;border-radius:999px;background:#e8eef8;font-weight:bold;font-size:12px}.small{color:#6b7280;font-size:13px}.notice{background:#e9f8ef;border:1px solid #9bd6ad;color:#176b36;padding:11px;border-radius:10px;margin-bottom:14px}.actions{display:flex;gap:10px;flex-wrap:wrap}iframe{width:100%;height:72vh;border:1px solid #e5e7eb;border-radius:12px}.module-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}@media(max-width:700px){.grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}table{display:block;overflow-x:auto;white-space:nowrap}}</style></head><body><div class="wrap">\n<div class="topbar"><div class="brand"><h1>ACT Doctor Call</h1><div class="sub">Insurance · Doctor Case Review</div></div><div class="top-actions"><a class="btn light" href="/modules">Apps</a><a class="btn light" href="/">BedFlow</a>{% if role == \'admin\' %}<a class="btn light" href="/doctor-call/admin/doctors">Doctors</a>{% endif %}<a class="btn light" href="/logout">Logout</a></div></div>\n{% if message %}<div class="notice">{{ message }}</div>{% endif %}\n<div class="card"><h2 style="margin-top:0">Send New Case</h2><form method="post" action="/doctor-call/new" enctype="multipart/form-data"><div class="grid"><div><label>Case No. *</label><input name="case_no" required></div><div><label>Patient Ref.</label><input name="patient_ref" placeholder="Demo reference only"></div><div><label>Specialty *</label><select id="specialty" name="specialty" required><option value="">Choose specialty</option>{% for specialty in specialties %}<option value="{{ specialty }}">{{ specialty }}</option>{% endfor %}</select></div><div><label>Doctor *</label><select id="doctor" name="doctor_username" required><option value="">Choose doctor</option>{% for d in doctors %}<option value="{{ d[\'username\'] }}" data-specialty="{{ d[\'specialty\'] }}">{{ d[\'display_name\'] }} — {{ d[\'specialty\'] }}</option>{% endfor %}</select></div><div style="grid-column:1/-1"><label>Medical File PDF *</label><input type="file" name="pdf" accept="application/pdf" required></div></div><div style="margin-top:14px"><button class="btn primary">Send to Doctor 🔔</button></div></form></div>\n<div class="card"><h2 style="margin-top:0">Cases</h2><table><thead><tr><th>Case</th><th>Specialty</th><th>Doctor</th><th>Status</th><th>Sent</th><th>Opened</th><th>Decision</th><th></th></tr></thead><tbody>{% for c in cases %}<tr><td>{{ c[\'case_no\'] }}</td><td>{{ c[\'specialty\'] }}</td><td>{{ c[\'doctor_display\'] or c[\'doctor_username\'] }}</td><td><span class="badge">{{ c[\'status\'] }}</span></td><td>{{ c[\'sent_at\'] }}</td><td>{{ c[\'opened_at\'] or \'-\' }}</td><td>{{ c[\'decided_at\'] or \'-\' }}</td><td><a class="btn light" href="/doctor-call/case/{{ c[\'id\'] }}">View</a></td></tr>{% else %}<tr><td colspan="8" class="small">No cases yet.</td></tr>{% endfor %}</tbody></table></div></div>\n<script>const specialty=document.getElementById(\'specialty\'),doctor=document.getElementById(\'doctor\');function filterDoctors(){const s=specialty.value;doctor.value=\'\';[...doctor.options].forEach((o,i)=>{if(i===0)return;o.hidden=!!s&&o.dataset.specialty!==s;});}specialty.addEventListener(\'change\',filterDoctors);</script></body></html>'
+DOCTOR_CALL_INSURANCE_HTML = """
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="45">
+<title>ACT Doctor Call</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
+.wrap{max-width:1100px;margin:auto;padding:20px 16px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}
+.brand h1{margin:0;font-size:27px}.sub{color:#6b7280;margin-top:4px}
+.top-actions,.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{display:inline-block;border:0;border-radius:10px;padding:11px 15px;font-weight:bold;text-decoration:none;cursor:pointer}
+.primary{background:#1f6feb;color:white}.smart{background:#6d28d9;color:white}.light{background:white;border:1px solid #e5e7eb;color:#172033}
+.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 6px 18px rgba(0,0,0,.035)}
+.smart-card{border:1px solid #c4b5fd;background:linear-gradient(180deg,#faf7ff,#fff)}
+.beta{display:inline-block;padding:5px 8px;border-radius:999px;background:#ede9fe;color:#5b21b6;font-size:12px;font-weight:800}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+label{display:block;color:#6b7280;font-size:13px;margin-bottom:6px}
+input,select{width:100%;padding:12px;border:1px solid #d5dae2;border-radius:10px;background:white;font-size:15px}
+.help{color:#6b7280;font-size:13px;line-height:1.5;margin-top:8px}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #e5e7eb;font-size:14px}
+th{color:#6b7280;font-size:12px;text-transform:uppercase}
+.badge{display:inline-block;padding:6px 9px;border-radius:999px;background:#e8eef8;font-weight:bold;font-size:12px}
+.notice{background:#e9f8ef;border:1px solid #9bd6ad;color:#176b36;padding:12px;border-radius:10px;margin-bottom:14px;line-height:1.5}
+@media(max-width:700px){.grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}table{display:block;overflow-x:auto;white-space:nowrap}.btn{width:100%;text-align:center}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1>ACT Doctor Call</h1>
+      <div class="sub">Insurance · Doctor Case Review</div>
+    </div>
+    <div class="top-actions">
+      <a class="btn light" href="/modules">Apps</a>
+      <a class="btn light" href="/">BedFlow</a>
+      {% if role == 'admin' %}<a class="btn light" href="/doctor-call/admin/doctors">Doctors</a>{% endif %}
+      <a class="btn light" href="/logout">Logout</a>
+    </div>
+  </div>
+
+  {% if message %}<div class="notice">{{ message }}</div>{% endif %}
+
+  <div class="card smart-card">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
+      <div>
+        <span class="beta">BETA v3.3</span>
+        <h2 style="margin:10px 0 6px">🤖 Smart Referral</h2>
+        <div class="help">Upload the medical report and PDF attachments. ACT reads the available PDF text, detects the likely specialty, selects the least-busy active doctor in that specialty, merges the PDFs, and sends the case automatically.</div>
+      </div>
+    </div>
+
+    <form method="post" action="/doctor-call/smart-referral" enctype="multipart/form-data" style="margin-top:16px">
+      <div class="grid">
+        <div>
+          <label>Case No. (optional)</label>
+          <input name="case_no" placeholder="Auto-generated if empty">
+        </div>
+        <div>
+          <label>Patient Ref. (optional)</label>
+          <input name="patient_ref" placeholder="Patient / approval reference">
+        </div>
+        <div style="grid-column:1/-1">
+          <label>Medical report + attachments (PDF) *</label>
+          <input type="file" name="pdfs" accept="application/pdf" multiple required>
+          <div class="help">You can select more than one PDF. Text-based PDFs are supported in this beta. Scanned-image PDFs will be held for manual routing until OCR is added.</div>
+        </div>
+      </div>
+      <div style="margin-top:14px">
+        <button class="btn smart" type="submit">Analyze & Auto-Send 🔔</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Manual Referral</h2>
+    <form method="post" action="/doctor-call/new" enctype="multipart/form-data">
+      <div class="grid">
+        <div><label>Case No. *</label><input name="case_no" required></div>
+        <div><label>Patient Ref.</label><input name="patient_ref" placeholder="Demo reference only"></div>
+        <div>
+          <label>Specialty *</label>
+          <select id="specialty" name="specialty" required>
+            <option value="">Choose specialty</option>
+            {% for specialty in specialties %}<option value="{{ specialty }}">{{ specialty }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Doctor *</label>
+          <select id="doctor" name="doctor_username" required>
+            <option value="">Choose doctor</option>
+            {% for d in doctors %}<option value="{{ d['username'] }}" data-specialty="{{ d['specialty'] }}">{{ d['display_name'] }} — {{ d['specialty'] }}</option>{% endfor %}
+          </select>
+        </div>
+        <div style="grid-column:1/-1"><label>Medical File PDF *</label><input type="file" name="pdf" accept="application/pdf" required></div>
+      </div>
+      <div style="margin-top:14px"><button class="btn primary">Send to Doctor 🔔</button></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Cases</h2>
+    <table>
+      <thead><tr><th>Case</th><th>Specialty</th><th>Doctor</th><th>Status</th><th>Sent</th><th>Opened</th><th>Decision</th><th></th></tr></thead>
+      <tbody>
+      {% for c in cases %}
+        <tr>
+          <td>{{ c['case_no'] }}</td>
+          <td>{{ c['specialty'] }}</td>
+          <td>{{ c['doctor_display'] or c['doctor_username'] }}</td>
+          <td><span class="badge">{{ c['status'] }}</span></td>
+          <td>{{ c['sent_at'] }}</td>
+          <td>{{ c['opened_at'] or '-' }}</td>
+          <td>{{ c['decided_at'] or '-' }}</td>
+          <td><a class="btn light" href="/doctor-call/case/{{ c['id'] }}">View</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8">No cases yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const specialty=document.getElementById("specialty");
+const doctor=document.getElementById("doctor");
+function filterDoctors(){
+  const s=specialty.value;
+  doctor.value="";
+  [...doctor.options].forEach((o,i)=>{
+    if(i===0)return;
+    o.hidden=!!s&&o.dataset.specialty!==s;
+  });
+}
+specialty.addEventListener("change",filterDoctors);
+</script>
+</body>
+</html>
+"""
 
 DOCTOR_CALL_DOCTOR_HTML = """
 <!doctype html>
@@ -2782,6 +2928,287 @@ def allowed_pdf(filename):
     )
 
 
+SMART_REFERRAL_RULES = {
+    "Cardiology": {
+        "aliases": ["cardiology", "cardiac", "heart"],
+        "keywords": [
+            "chest pain", "acute coronary", "acs", "stemi", "nstemi",
+            "troponin", "myocardial infarction", "heart failure",
+            "arrhythmia", "atrial fibrillation", "afib", "ecg",
+            "coronary", "cardiogenic", "bradycardia", "tachycardia"
+        ]
+    },
+    "Pulmonology": {
+        "aliases": ["pulmonology", "pulmonary", "respiratory", "chest"],
+        "keywords": [
+            "pneumonia", "asthma", "copd", "bronchiectasis",
+            "pleural effusion", "hemoptysis", "lung", "pulmonary",
+            "bronchitis", "respiratory distress"
+        ]
+    },
+    "Neurology": {
+        "aliases": ["neurology", "neurologist", "neuro"],
+        "keywords": [
+            "stroke", "cva", "ischemic stroke", "seizure", "epilepsy",
+            "hemiparesis", "hemiplegia", "facial weakness", "aphasia",
+            "multiple sclerosis", "neuropathy", "migraine"
+        ]
+    },
+    "Neurosurgery": {
+        "aliases": ["neurosurgery", "neurosurgeon"],
+        "keywords": [
+            "subdural", "epidural hematoma", "intracranial hemorrhage",
+            "brain tumor", "spinal cord compression", "disc prolapse",
+            "cauda equina", "neurosurgical", "skull fracture"
+        ]
+    },
+    "General Surgery": {
+        "aliases": ["general surgery", "surgery", "surgeon"],
+        "keywords": [
+            "appendicitis", "cholecystitis", "bowel obstruction",
+            "intestinal obstruction", "perforation", "acute abdomen",
+            "hernia", "peritonitis", "abscess", "gallbladder"
+        ]
+    },
+    "Orthopedics": {
+        "aliases": ["orthopedics", "orthopaedics", "orthopedic", "orthopaedic"],
+        "keywords": [
+            "fracture", "dislocation", "femur", "tibia", "fibula",
+            "radius", "ulna", "humerus", "hip fracture", "joint injury",
+            "ligament", "orthopedic"
+        ]
+    },
+    "Gastroenterology": {
+        "aliases": ["gastroenterology", "gastro", "gi"],
+        "keywords": [
+            "hematemesis", "melena", "gi bleed", "gastrointestinal bleed",
+            "pancreatitis", "cirrhosis", "hepatitis", "endoscopy",
+            "colitis", "crohn", "ulcerative colitis", "liver"
+        ]
+    },
+    "Nephrology": {
+        "aliases": ["nephrology", "renal", "kidney"],
+        "keywords": [
+            "acute kidney injury", "aki", "chronic kidney disease", "ckd",
+            "renal failure", "dialysis", "hemodialysis", "nephrotic",
+            "nephritic", "uremia", "renal impairment"
+        ]
+    },
+    "Urology": {
+        "aliases": ["urology", "urologist"],
+        "keywords": [
+            "urinary retention", "ureteric stone", "renal stone",
+            "kidney stone", "hydronephrosis", "hematuria", "prostate",
+            "testicular", "bladder", "ureter"
+        ]
+    },
+    "ENT": {
+        "aliases": ["ent", "otolaryngology", "ear nose throat"],
+        "keywords": [
+            "epistaxis", "tonsillitis", "otitis", "mastoiditis",
+            "ear discharge", "sinusitis", "nasal", "larynx", "pharynx"
+        ]
+    },
+    "OB/GYN": {
+        "aliases": ["ob/gyn", "obgyn", "obstetrics", "gynecology", "gynaecology"],
+        "keywords": [
+            "pregnancy", "pregnant", "labor", "labour", "cesarean",
+            "caesarean", "preeclampsia", "eclampsia", "ectopic",
+            "vaginal bleeding", "ovarian", "uterus", "uterine"
+        ]
+    },
+    "Pediatrics": {
+        "aliases": ["pediatrics", "paediatrics", "pediatric", "paediatric"],
+        "keywords": [
+            "pediatric", "paediatric", "child", "infant", "newborn",
+            "neonate", "neonatal", "baby"
+        ]
+    },
+    "ICU/Critical Care": {
+        "aliases": ["icu", "critical care", "intensive care", "intensivist"],
+        "keywords": [
+            "septic shock", "cardiogenic shock", "shock", "vasopressor",
+            "mechanical ventilation", "ventilated", "intubated",
+            "respiratory failure", "cardiac arrest", "multi organ",
+            "multiple organ failure", "critical care", "icu"
+        ]
+    },
+    "Internal Medicine": {
+        "aliases": ["internal medicine", "medicine", "internist"],
+        "keywords": [
+            "diabetes", "hypertension", "anemia", "electrolyte",
+            "fever", "infection", "dka", "hyperglycemia", "hypoglycemia",
+            "medical management"
+        ]
+    }
+}
+
+
+def normalize_text(value):
+    return " ".join((value or "").lower().replace("\n", " ").split())
+
+
+def extract_and_merge_pdfs(files):
+    combined_text_parts = []
+    writer = PdfWriter()
+    total_pages = 0
+    accepted_files = []
+
+    for uploaded in files:
+        if not uploaded or not uploaded.filename:
+            continue
+        if not allowed_pdf(uploaded.filename):
+            raise ValueError("Only PDF files are allowed.")
+
+        raw = uploaded.read()
+        if not raw:
+            continue
+
+        try:
+            reader = PdfReader(io.BytesIO(raw))
+        except Exception as exc:
+            raise ValueError(
+                f"Could not read PDF: {secure_filename(uploaded.filename)}"
+            ) from exc
+
+        if reader.is_encrypted:
+            try:
+                reader.decrypt("")
+            except Exception as exc:
+                raise ValueError(
+                    f"Encrypted PDF is not supported: {secure_filename(uploaded.filename)}"
+                ) from exc
+
+        accepted_files.append(secure_filename(uploaded.filename) or "attachment.pdf")
+
+        for page in reader.pages:
+            total_pages += 1
+            try:
+                page_text = page.extract_text() or ""
+            except Exception:
+                page_text = ""
+
+            if page_text.strip():
+                combined_text_parts.append(page_text)
+
+            writer.add_page(page)
+
+    if not accepted_files or total_pages == 0:
+        raise ValueError("No readable PDF pages were uploaded.")
+
+    output = io.BytesIO()
+    writer.write(output)
+    return {
+        "text": "\n".join(combined_text_parts),
+        "pdf_bytes": output.getvalue(),
+        "page_count": total_pages,
+        "file_count": len(accepted_files),
+        "filename": (
+            accepted_files[0]
+            if len(accepted_files) == 1
+            else "ACT_Smart_Referral_Combined.pdf"
+        )
+    }
+
+
+def specialty_rule_score(text, rule):
+    score = 0
+    matches = []
+    for keyword in rule["keywords"]:
+        if keyword in text:
+            weight = 2 if " " in keyword else 1
+            score += weight
+            matches.append(keyword)
+    return score, matches
+
+
+def doctor_matches_specialty(doctor_specialty, canonical_specialty):
+    normalized = normalize_text(doctor_specialty)
+    rule = SMART_REFERRAL_RULES[canonical_specialty]
+
+    if normalized == normalize_text(canonical_specialty):
+        return True
+
+    return any(
+        alias in normalized or normalized in alias
+        for alias in rule["aliases"]
+    )
+
+
+def detect_specialty_and_doctor(report_text, doctors):
+    text = normalize_text(report_text)
+    if len(text) < 80:
+        return {
+            "ok": False,
+            "reason": (
+                "The PDF does not contain enough extractable text. "
+                "It may be a scanned-image PDF; use manual referral for this beta."
+            )
+        }
+
+    scored = []
+    for specialty, rule in SMART_REFERRAL_RULES.items():
+        score, matches = specialty_rule_score(text, rule)
+        if score > 0:
+            scored.append((score, specialty, matches))
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+
+    if not scored:
+        return {
+            "ok": False,
+            "reason": "No supported specialty pattern was detected confidently."
+        }
+
+    best_score, best_specialty, matches = scored[0]
+    second_score = scored[1][0] if len(scored) > 1 else 0
+
+    # Beta safety gate: avoid auto-sending weak or ambiguous matches.
+    if best_score < 2 or (second_score > 0 and best_score == second_score):
+        top_names = ", ".join(item[1] for item in scored[:3])
+        return {
+            "ok": False,
+            "reason": (
+                "Routing is ambiguous in this beta"
+                + (f" between: {top_names}." if top_names else ".")
+                + " Please use manual referral."
+            )
+        }
+
+    candidates = [
+        d for d in doctors
+        if doctor_matches_specialty(d["specialty"], best_specialty)
+    ]
+
+    if not candidates:
+        return {
+            "ok": False,
+            "reason": (
+                f"Detected {best_specialty}, but no active doctor in that "
+                "specialty is configured."
+            )
+        }
+
+    candidates.sort(
+        key=lambda d: (
+            int(d["pending_count"] or 0),
+            (d["display_name"] or d["username"]).lower()
+        )
+    )
+    selected = candidates[0]
+
+    return {
+        "ok": True,
+        "specialty": selected["specialty"],
+        "canonical_specialty": best_specialty,
+        "doctor_username": selected["username"],
+        "doctor_display": selected["display_name"],
+        "pending_count": selected["pending_count"],
+        "matches": matches[:6],
+        "score": best_score
+    }
+
+
 def send_push_payload(username, payload):
     ensure_vapid_keys()
     conn = get_db()
@@ -2880,6 +3307,161 @@ def doctor_call_insurance():
         message=request.args.get("message"),
         role=session.get("role")
     )
+
+
+@app.route("/doctor-call/smart-referral", methods=["POST"])
+@login_required
+def doctor_call_smart_referral():
+    if session.get("role") not in ("insurance", "admin"):
+        return redirect(landing_url())
+
+    files = [
+        f for f in request.files.getlist("pdfs")
+        if f and f.filename
+    ]
+    case_no = request.form.get("case_no", "").strip()
+    patient_ref = request.form.get("patient_ref", "").strip()
+
+    if not files:
+        return redirect(url_for(
+            "doctor_call_insurance",
+            message="Please upload at least one PDF."
+        ))
+
+    try:
+        merged = extract_and_merge_pdfs(files)
+    except ValueError as exc:
+        return redirect(url_for(
+            "doctor_call_insurance",
+            message=f"Smart Referral stopped: {exc}"
+        ))
+
+    conn = get_db()
+    doctors = conn.execute("""
+        SELECT
+            u.username,
+            u.display_name,
+            p.specialty,
+            COALESCE(SUM(
+                CASE
+                    WHEN c.status IN ('Sent', 'Opened') THEN 1
+                    ELSE 0
+                END
+            ), 0) AS pending_count
+        FROM users u
+        JOIN doctor_profiles p
+          ON p.username = u.username
+        LEFT JOIN doctor_cases c
+          ON c.doctor_username = u.username
+        WHERE u.role = 'doctor'
+          AND p.active = 1
+        GROUP BY u.username, u.display_name, p.specialty
+        ORDER BY u.display_name
+    """).fetchall()
+
+    routing = detect_specialty_and_doctor(
+        merged["text"],
+        doctors
+    )
+
+    if not routing["ok"]:
+        conn.close()
+        return redirect(url_for(
+            "doctor_call_insurance",
+            message=f"Smart Referral stopped: {routing['reason']}"
+        ))
+
+    if not case_no:
+        case_no = "AUTO-" + now_dt().strftime("%Y%m%d-%H%M%S")
+
+    safe_name = secure_filename(merged["filename"]) or "smart_referral.pdf"
+    stamped = f"{int(datetime.now().timestamp())}_{safe_name}"
+    sent_time = now_text()
+
+    if USE_POSTGRES:
+        cur = conn.execute("""
+            INSERT INTO doctor_cases
+            (
+                case_no,
+                patient_ref,
+                specialty,
+                doctor_username,
+                pdf_filename,
+                pdf_original_name,
+                pdf_data,
+                status,
+                sent_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'Sent', ?)
+            RETURNING id
+        """, (
+            case_no,
+            patient_ref,
+            routing["specialty"],
+            routing["doctor_username"],
+            stamped,
+            safe_name,
+            merged["pdf_bytes"],
+            sent_time
+        ))
+        case_id = cur.fetchone()["id"]
+    else:
+        cur = conn.execute("""
+            INSERT INTO doctor_cases
+            (
+                case_no,
+                patient_ref,
+                specialty,
+                doctor_username,
+                pdf_filename,
+                pdf_original_name,
+                pdf_data,
+                status,
+                sent_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'Sent', ?)
+        """, (
+            case_no,
+            patient_ref,
+            routing["specialty"],
+            routing["doctor_username"],
+            stamped,
+            safe_name,
+            merged["pdf_bytes"],
+            sent_time
+        ))
+        case_id = cur.lastrowid
+
+    conn.commit()
+    conn.close()
+
+    push_result = send_case_push(
+        case_id,
+        case_no,
+        routing["specialty"],
+        routing["doctor_username"]
+    )
+
+    matched_terms = ", ".join(routing["matches"]) or "clinical pattern"
+    device_note = (
+        f" Push delivered to {push_result['sent']} of "
+        f"{push_result['registered']} registered device(s)."
+        if push_result["registered"] > 0
+        else " Doctor has no registered notification device yet."
+    )
+
+    message = (
+        f"🤖 Smart Referral: {case_no} → {routing['specialty']} → "
+        f"{routing['doctor_display']}. "
+        f"Matched: {matched_terms}. "
+        f"Merged {merged['file_count']} PDF(s), {merged['page_count']} page(s)."
+        + device_note
+    )
+
+    return redirect(url_for(
+        "doctor_call_insurance",
+        message=message
+    ))
 
 
 @app.route("/doctor-call/new", methods=["POST"])
