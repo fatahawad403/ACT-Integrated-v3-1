@@ -207,9 +207,9 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
   <div class="card smart-card">
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
       <div>
-        <span class="beta">BETA v3.3</span>
+        <span class="beta">BETA v3.3.1 OCR</span>
         <h2 style="margin:10px 0 6px">🤖 Smart Referral</h2>
-        <div class="help">Upload the medical report and PDF attachments. ACT reads the available PDF text, detects the likely specialty, selects the least-busy active doctor in that specialty, merges the PDFs, and sends the case automatically.</div>
+        <div class="help">Upload the medical report and PDF attachments. ACT first reads embedded PDF text; if a page is scanned as an image it automatically runs OCR, then detects the likely specialty, selects the least-busy active doctor in that specialty, merges the PDFs, and sends the case automatically.</div>
       </div>
     </div>
 
@@ -226,7 +226,7 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
         <div style="grid-column:1/-1">
           <label>Medical report + attachments (PDF) *</label>
           <input type="file" name="pdfs" accept="application/pdf" multiple required>
-          <div class="help">You can select more than one PDF. Text-based PDFs are supported in this beta. Scanned-image PDFs will be held for manual routing until OCR is added.</div>
+          <div class="help">You can select more than one PDF. Text PDFs and scanned-image PDFs are supported. OCR is limited to the first 12 image-only pages per upload in this beta.</div>
         </div>
       </div>
       <div style="margin-top:14px">
@@ -3048,11 +3048,101 @@ def normalize_text(value):
     return " ".join((value or "").lower().replace("\n", " ").split())
 
 
+OCR_MAX_PAGES = 12
+OCR_MIN_PAGE_TEXT = 40
+_OCR_ENGINE = None
+
+
+def get_ocr_engine():
+    global _OCR_ENGINE
+
+    if _OCR_ENGINE is None:
+        try:
+            from rapidocr_onnxruntime import RapidOCR
+            _OCR_ENGINE = RapidOCR()
+        except Exception as exc:
+            raise RuntimeError(
+                "OCR engine could not start on the server."
+            ) from exc
+
+    return _OCR_ENGINE
+
+
+def ocr_pdf_pages(pdf_bytes, page_indices):
+    if not page_indices:
+        return {}
+
+    try:
+        import pymupdf
+        import numpy as np
+        from PIL import Image
+    except Exception as exc:
+        raise RuntimeError(
+            "OCR dependencies are unavailable on the server."
+        ) from exc
+
+    engine = get_ocr_engine()
+    document = pymupdf.open(
+        stream=pdf_bytes,
+        filetype="pdf"
+    )
+    results = {}
+
+    try:
+        for page_index in page_indices:
+            if page_index < 0 or page_index >= document.page_count:
+                continue
+
+            page = document.load_page(page_index)
+            pixmap = page.get_pixmap(
+                matrix=pymupdf.Matrix(1.8, 1.8),
+                alpha=False
+            )
+
+            image = Image.open(
+                io.BytesIO(pixmap.tobytes("png"))
+            ).convert("RGB")
+            image_array = np.asarray(image)
+
+            try:
+                ocr_result, _ = engine(image_array)
+            except Exception:
+                ocr_result = None
+
+            lines = []
+            for item in (ocr_result or []):
+                if not isinstance(item, (list, tuple)) or len(item) < 2:
+                    continue
+
+                value = str(item[1]).strip()
+                if not value:
+                    continue
+
+                confidence = 1.0
+                if len(item) >= 3:
+                    try:
+                        confidence = float(item[2])
+                    except (TypeError, ValueError):
+                        confidence = 1.0
+
+                if confidence >= 0.35:
+                    lines.append(value)
+
+            results[page_index] = " ".join(lines)
+
+    finally:
+        document.close()
+
+    return results
+
+
 def extract_and_merge_pdfs(files):
     combined_text_parts = []
     writer = PdfWriter()
     total_pages = 0
     accepted_files = []
+    ocr_pages_used = 0
+    ocr_warning = None
 
     for uploaded in files:
         if not uploaded or not uploaded.filename:
@@ -3079,30 +3169,90 @@ def extract_and_merge_pdfs(files):
                     f"Encrypted PDF is not supported: {secure_filename(uploaded.filename)}"
                 ) from exc
 
-        accepted_files.append(secure_filename(uploaded.filename) or "attachment.pdf")
+        accepted_files.append(
+            secure_filename(uploaded.filename) or "attachment.pdf"
+        )
 
-        for page in reader.pages:
+        page_texts = {}
+        image_only_pages = []
+
+        for page_index, page in enumerate(reader.pages):
             total_pages += 1
+
             try:
                 page_text = page.extract_text() or ""
             except Exception:
                 page_text = ""
 
-            if page_text.strip():
-                combined_text_parts.append(page_text)
+            page_text = page_text.strip()
+            page_texts[page_index] = page_text
+
+            if len(page_text) < OCR_MIN_PAGE_TEXT:
+                image_only_pages.append(page_index)
 
             writer.add_page(page)
+
+        remaining_ocr_pages = max(
+            0,
+            OCR_MAX_PAGES - ocr_pages_used
+        )
+
+        if image_only_pages and remaining_ocr_pages > 0:
+            pages_to_ocr = image_only_pages[:remaining_ocr_pages]
+
+            try:
+                ocr_results = ocr_pdf_pages(
+                    raw,
+                    pages_to_ocr
+                )
+                ocr_pages_used += len(pages_to_ocr)
+
+                for page_index, ocr_text in ocr_results.items():
+                    if len(ocr_text.strip()) > len(
+                        page_texts.get(page_index, "").strip()
+                    ):
+                        page_texts[page_index] = ocr_text.strip()
+
+            except RuntimeError as exc:
+                ocr_warning = str(exc)
+
+        for page_index in sorted(page_texts):
+            page_text = page_texts[page_index].strip()
+            if page_text:
+                combined_text_parts.append(page_text)
 
     if not accepted_files or total_pages == 0:
         raise ValueError("No readable PDF pages were uploaded.")
 
+    extracted_text = "\n".join(combined_text_parts)
+
+    if len(normalize_text(extracted_text)) < 80:
+        if ocr_warning:
+            raise ValueError(
+                "The PDF appears to be scanned, but OCR could not run: "
+                + ocr_warning
+            )
+
+        if ocr_pages_used >= OCR_MAX_PAGES:
+            raise ValueError(
+                "OCR ran, but not enough readable text was found within "
+                f"the first {OCR_MAX_PAGES} scanned pages."
+            )
+
+        raise ValueError(
+            "OCR ran, but the document still does not contain enough "
+            "readable clinical text for safe automatic routing."
+        )
+
     output = io.BytesIO()
     writer.write(output)
+
     return {
-        "text": "\n".join(combined_text_parts),
+        "text": extracted_text,
         "pdf_bytes": output.getvalue(),
         "page_count": total_pages,
         "file_count": len(accepted_files),
+        "ocr_pages": ocr_pages_used,
         "filename": (
             accepted_files[0]
             if len(accepted_files) == 1
@@ -3454,7 +3604,8 @@ def doctor_call_smart_referral():
         f"🤖 Smart Referral: {case_no} → {routing['specialty']} → "
         f"{routing['doctor_display']}. "
         f"Matched: {matched_terms}. "
-        f"Merged {merged['file_count']} PDF(s), {merged['page_count']} page(s)."
+        f"Merged {merged['file_count']} PDF(s), {merged['page_count']} page(s). "
+        f"OCR processed {merged['ocr_pages']} scanned page(s)."
         + device_note
     )
 
