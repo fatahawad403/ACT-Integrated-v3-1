@@ -210,7 +210,7 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
   {% if message %}<div class="notice">{{ message }}</div>{% endif %}
 
   <div class="card smart-card">
-    <span class="beta">BETA v3.5 · SMART ROUTING</span>
+    <span class="beta">BETA v3.5.1 · FULL REPORT ROUTING</span>
     <h2 style="margin:10px 0 6px">🤖 Smart Referral</h2>
     <div class="help">
       PDF text and scanned pages are read on this device before upload. Render receives the original PDF plus the extracted text for routing, so the free server stays stable.
@@ -232,7 +232,7 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
           <label>Medical report + attachments (PDF) *</label>
           <input id="smartPdfs" type="file" name="pdfs" accept="application/pdf" multiple required>
           <div class="help">
-            ACT checks up to the first 6 pages of each PDF. If a checked page has little/no text, Browser OCR is used on up to 3 scanned pages total.
+            ACT reads text from the full report (up to 30 pages). If pages are scanned images, Browser OCR is applied to selected scanned pages so the diagnosis can be found even when it is not near the beginning.
           </div>
         </div>
       </div>
@@ -326,9 +326,12 @@ function progress(msg){
 async function readPdfOnDevice(file, state){
   const data=new Uint8Array(await file.arrayBuffer());
   const pdf=await pdfjsLib.getDocument({data}).promise;
-  const pagesToCheck=Math.min(pdf.numPages,6);
+  const pagesToCheck=Math.min(pdf.numPages,30);
   const chunks=[];
+  const imageOnlyPages=[];
 
+  // First pass: direct text extraction is lightweight, so scan the whole
+  // report instead of only the opening pages.
   for(let p=1;p<=pagesToCheck;p++){
     progress("Reading "+file.name+" — page "+p+" of "+pagesToCheck+"...");
     const page=await pdf.getPage(p);
@@ -337,14 +340,37 @@ async function readPdfOnDevice(file, state){
 
     if(directText.length>=40){
       chunks.push(directText);
-      continue;
+    }else{
+      imageOnlyPages.push(p);
     }
+  }
 
-    if(state.ocrPages>=3 || !window.Tesseract){
-      continue;
+  if(!imageOnlyPages.length || !window.Tesseract){
+    return chunks.join("\\n");
+  }
+
+  // OCR selected image-only pages. Prefer the beginning and end of the
+  // report, where referral diagnosis / impression / discharge summary
+  // commonly appears, while keeping browser processing practical.
+  const selected=[];
+  const pushUnique=p=>{
+    if(p && imageOnlyPages.includes(p) && !selected.includes(p)){
+      selected.push(p);
     }
+  };
+
+  imageOnlyPages.slice(0,3).forEach(pushUnique);
+  imageOnlyPages.slice(-3).forEach(pushUnique);
+
+  if(imageOnlyPages.length>6){
+    pushUnique(imageOnlyPages[Math.floor(imageOnlyPages.length/2)]);
+  }
+
+  for(const p of selected){
+    if(state.ocrPages>=7) break;
 
     progress("OCR on "+file.name+" — scanned page "+p+"...");
+    const page=await pdf.getPage(p);
     const viewport=page.getViewport({scale:1.35});
     const canvas=document.createElement("canvas");
     const ctx=canvas.getContext("2d",{alpha:false});
