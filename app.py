@@ -3212,7 +3212,7 @@ SMART_REFERRAL_RULES = {
     },
     "General Surgery": {
         "aliases": [
-            "general surgery", "general surgeon", "surgery"
+            "general surgery", "general surgeon"
         ],
         "keywords": [
             "appendicitis", "cholecystitis", "bowel obstruction",
@@ -3318,8 +3318,7 @@ SMART_REFERRAL_RULES = {
     },
     "Internal Medicine": {
         "aliases": [
-            "internal medicine", "medicine", "internist",
-            "general medicine"
+            "internal medicine", "internist", "general medicine"
         ],
         "keywords": [
             "hyponatremia", "hypernatremia", "electrolyte imbalance",
@@ -3523,12 +3522,18 @@ def doctor_matches_specialty(doctor_specialty, canonical_specialty):
     if normalized == normalize_text(canonical_specialty):
         return True
 
-    return any(
-        normalize_text(alias) == normalized
-        or normalize_text(alias) in normalized
-        or normalized in normalize_text(alias)
-        for alias in aliases
-    )
+    for alias in aliases:
+        alias_normalized = normalize_text(alias)
+
+        if normalized == alias_normalized:
+            return True
+
+        # Allow labels such as "Cardiology Consultant" without treating
+        # "Neurosurgery" as "General Surgery" or other substring collisions.
+        if keyword_in_text(normalized, alias_normalized):
+            return True
+
+    return False
 
 
 def select_least_busy_doctor(doctors):
