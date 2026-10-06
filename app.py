@@ -3179,9 +3179,7 @@ def normalize_text(value):
 
 
 def merge_uploaded_pdfs(files):
-    writer = PdfWriter()
-    total_pages = 0
-    accepted_files = []
+    payloads = []
 
     for uploaded in files:
         if not uploaded or not uploaded.filename:
@@ -3194,11 +3192,16 @@ def merge_uploaded_pdfs(files):
         if not raw:
             continue
 
+        safe_name = secure_filename(
+            uploaded.filename
+        ) or "attachment.pdf"
+
         try:
             reader = PdfReader(io.BytesIO(raw))
+            page_count = len(reader.pages)
         except Exception as exc:
             raise ValueError(
-                f"Could not read PDF: {secure_filename(uploaded.filename)}"
+                f"Could not read PDF: {safe_name}"
             ) from exc
 
         if reader.is_encrypted:
@@ -3206,19 +3209,40 @@ def merge_uploaded_pdfs(files):
                 reader.decrypt("")
             except Exception as exc:
                 raise ValueError(
-                    f"Encrypted PDF is not supported: {secure_filename(uploaded.filename)}"
+                    f"Encrypted PDF is not supported: {safe_name}"
                 ) from exc
 
-        accepted_files.append(
-            secure_filename(uploaded.filename) or "attachment.pdf"
-        )
+        if page_count < 1:
+            continue
 
+        payloads.append({
+            "name": safe_name,
+            "bytes": raw,
+            "pages": page_count
+        })
+
+    if not payloads:
+        raise ValueError("No readable PDF pages were uploaded.")
+
+    # Most referrals contain one PDF. Keep its original bytes unchanged
+    # instead of rewriting every page on the small Render instance.
+    if len(payloads) == 1:
+        item = payloads[0]
+        return {
+            "pdf_bytes": item["bytes"],
+            "page_count": item["pages"],
+            "file_count": 1,
+            "filename": item["name"]
+        }
+
+    writer = PdfWriter()
+    total_pages = 0
+
+    for item in payloads:
+        reader = PdfReader(io.BytesIO(item["bytes"]))
         for page in reader.pages:
             writer.add_page(page)
             total_pages += 1
-
-    if not accepted_files or total_pages == 0:
-        raise ValueError("No readable PDF pages were uploaded.")
 
     output = io.BytesIO()
     writer.write(output)
@@ -3226,12 +3250,8 @@ def merge_uploaded_pdfs(files):
     return {
         "pdf_bytes": output.getvalue(),
         "page_count": total_pages,
-        "file_count": len(accepted_files),
-        "filename": (
-            accepted_files[0]
-            if len(accepted_files) == 1
-            else "ACT_Smart_Referral_Combined.pdf"
-        )
+        "file_count": len(payloads),
+        "filename": "ACT_Smart_Referral_Combined.pdf"
     }
 
 
