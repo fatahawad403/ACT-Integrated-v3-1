@@ -161,7 +161,6 @@ DOCTOR_CALL_INSURANCE_HTML = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="refresh" content="45">
 <title>ACT Doctor Call</title>
 <style>
 *{box-sizing:border-box}
@@ -171,6 +170,7 @@ body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
 .brand h1{margin:0;font-size:27px}.sub{color:#6b7280;margin-top:4px}
 .top-actions,.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .btn{display:inline-block;border:0;border-radius:10px;padding:11px 15px;font-weight:bold;text-decoration:none;cursor:pointer}
+.btn:disabled{opacity:.6;cursor:not-allowed}
 .primary{background:#1f6feb;color:white}.smart{background:#6d28d9;color:white}.light{background:white;border:1px solid #e5e7eb;color:#172033}
 .card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 6px 18px rgba(0,0,0,.035)}
 .smart-card{border:1px solid #c4b5fd;background:linear-gradient(180deg,#faf7ff,#fff)}
@@ -179,6 +179,8 @@ body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
 label{display:block;color:#6b7280;font-size:13px;margin-bottom:6px}
 input,select{width:100%;padding:12px;border:1px solid #d5dae2;border-radius:10px;background:white;font-size:15px}
 .help{color:#6b7280;font-size:13px;line-height:1.5;margin-top:8px}
+.progress{display:none;margin-top:12px;padding:12px;border-radius:10px;background:#f3e8ff;color:#5b21b6;font-size:13px;line-height:1.5}
+.progress.show{display:block}
 table{width:100%;border-collapse:collapse}
 th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #e5e7eb;font-size:14px}
 th{color:#6b7280;font-size:12px;text-transform:uppercase}
@@ -186,6 +188,8 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
 .notice{background:#e9f8ef;border:1px solid #9bd6ad;color:#176b36;padding:12px;border-radius:10px;margin-bottom:14px;line-height:1.5}
 @media(max-width:700px){.grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}table{display:block;overflow-x:auto;white-space:nowrap}.btn{width:100%;text-align:center}}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -205,15 +209,15 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
   {% if message %}<div class="notice">{{ message }}</div>{% endif %}
 
   <div class="card smart-card">
-    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
-      <div>
-        <span class="beta">BETA v3.3.1 OCR</span>
-        <h2 style="margin:10px 0 6px">🤖 Smart Referral</h2>
-        <div class="help">Upload the medical report and PDF attachments. ACT first reads embedded PDF text; if a page is scanned as an image it automatically runs OCR, then detects the likely specialty, selects the least-busy active doctor in that specialty, merges the PDFs, and sends the case automatically.</div>
-      </div>
+    <span class="beta">BETA v3.4 · BROWSER OCR</span>
+    <h2 style="margin:10px 0 6px">🤖 Smart Referral</h2>
+    <div class="help">
+      PDF text and scanned pages are read on this device before upload. Render receives the original PDF plus the extracted text for routing, so the free server stays stable.
     </div>
 
-    <form method="post" action="/doctor-call/smart-referral" enctype="multipart/form-data" style="margin-top:16px">
+    <form id="smartReferralForm" method="post" action="/doctor-call/smart-referral" enctype="multipart/form-data" style="margin-top:16px">
+      <input type="hidden" id="clientExtractedText" name="client_extracted_text">
+      <input type="hidden" id="clientOcrPages" name="client_ocr_pages" value="0">
       <div class="grid">
         <div>
           <label>Case No. (optional)</label>
@@ -225,12 +229,15 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
         </div>
         <div style="grid-column:1/-1">
           <label>Medical report + attachments (PDF) *</label>
-          <input type="file" name="pdfs" accept="application/pdf" multiple required>
-          <div class="help">You can select more than one PDF. Text PDFs and scanned-image PDFs are supported. OCR is limited to the first 4 image-only pages per upload in this beta to keep the free Render instance stable.</div>
+          <input id="smartPdfs" type="file" name="pdfs" accept="application/pdf" multiple required>
+          <div class="help">
+            ACT checks up to the first 4 pages of each PDF. If a checked page has little/no text, Browser OCR is used on up to 2 scanned pages total.
+          </div>
         </div>
       </div>
+      <div id="smartProgress" class="progress"></div>
       <div style="margin-top:14px">
-        <button class="btn smart" type="submit">Analyze & Auto-Send 🔔</button>
+        <button id="smartSubmit" class="btn smart" type="submit">Analyze & Auto-Send 🔔</button>
       </div>
     </form>
   </div>
@@ -297,6 +304,129 @@ function filterDoctors(){
   });
 }
 specialty.addEventListener("change",filterDoctors);
+
+const smartForm=document.getElementById("smartReferralForm");
+const smartPdfs=document.getElementById("smartPdfs");
+const smartSubmit=document.getElementById("smartSubmit");
+const smartProgress=document.getElementById("smartProgress");
+const clientText=document.getElementById("clientExtractedText");
+const clientOcrPages=document.getElementById("clientOcrPages");
+
+if(window.pdfjsLib){
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+}
+
+function progress(msg){
+  smartProgress.textContent=msg;
+  smartProgress.classList.add("show");
+}
+
+async function readPdfOnDevice(file, state){
+  const data=new Uint8Array(await file.arrayBuffer());
+  const pdf=await pdfjsLib.getDocument({data}).promise;
+  const pagesToCheck=Math.min(pdf.numPages,4);
+  const chunks=[];
+
+  for(let p=1;p<=pagesToCheck;p++){
+    progress("Reading "+file.name+" — page "+p+" of "+pagesToCheck+"...");
+    const page=await pdf.getPage(p);
+    const textContent=await page.getTextContent();
+    const directText=textContent.items.map(i=>i.str||"").join(" ").trim();
+
+    if(directText.length>=40){
+      chunks.push(directText);
+      continue;
+    }
+
+    if(state.ocrPages>=2 || !window.Tesseract){
+      continue;
+    }
+
+    progress("OCR on "+file.name+" — scanned page "+p+"...");
+    const viewport=page.getViewport({scale:1.35});
+    const canvas=document.createElement("canvas");
+    const ctx=canvas.getContext("2d",{alpha:false});
+    canvas.width=Math.ceil(viewport.width);
+    canvas.height=Math.ceil(viewport.height);
+
+    await page.render({
+      canvasContext:ctx,
+      viewport:viewport
+    }).promise;
+
+    const result=await Tesseract.recognize(
+      canvas,
+      "eng",
+      {
+        logger:m=>{
+          if(m && m.status==="recognizing text"){
+            progress(
+              "OCR "+file.name+" — page "+p+
+              " ("+Math.round((m.progress||0)*100)+"%)"
+            );
+          }
+        }
+      }
+    );
+
+    const ocrText=((result||{}).data||{}).text||"";
+    if(ocrText.trim()) chunks.push(ocrText.trim());
+    state.ocrPages+=1;
+
+    canvas.width=1;
+    canvas.height=1;
+  }
+
+  return chunks.join("\n");
+}
+
+smartForm.addEventListener("submit",async event=>{
+  if(smartForm.dataset.ready==="1") return;
+
+  event.preventDefault();
+
+  const files=[...smartPdfs.files];
+  if(!files.length) return;
+
+  smartSubmit.disabled=true;
+  smartSubmit.textContent="Reading report...";
+  progress("Preparing Smart Referral on this device...");
+
+  try{
+    if(!window.pdfjsLib){
+      throw new Error("PDF reader library did not load.");
+    }
+
+    const state={ocrPages:0};
+    const texts=[];
+
+    for(const file of files){
+      const text=await readPdfOnDevice(file,state);
+      if(text.trim()) texts.push(text.trim());
+    }
+
+    const combined=texts.join("\n");
+    if(combined.replace(/\s+/g," ").trim().length<80){
+      throw new Error(
+        "Not enough readable clinical text was found. Please use Manual Referral for this file."
+      );
+    }
+
+    clientText.value=combined.slice(0,60000);
+    clientOcrPages.value=String(state.ocrPages);
+    smartForm.dataset.ready="1";
+    progress("Analysis text ready. Sending securely to ACT...");
+    smartSubmit.textContent="Sending...";
+    smartForm.submit();
+
+  }catch(err){
+    console.error(err);
+    progress("Smart Referral stopped: "+(err.message||"Could not read the PDF."));
+    smartSubmit.disabled=false;
+    smartSubmit.textContent="Analyze & Auto-Send 🔔";
+  }
+});
 </script>
 </body>
 </html>
@@ -3048,105 +3178,13 @@ def normalize_text(value):
     return " ".join((value or "").lower().replace("\n", " ").split())
 
 
-OCR_MAX_PAGES = 4
-OCR_MIN_PAGE_TEXT = 40
-_OCR_ENGINE = None
-
-
-def get_ocr_engine():
-    global _OCR_ENGINE
-
-    if _OCR_ENGINE is None:
-        try:
-            from rapidocr_onnxruntime import RapidOCR
-            _OCR_ENGINE = RapidOCR()
-        except Exception as exc:
-            raise RuntimeError(
-                "OCR engine could not start on the server."
-            ) from exc
-
-    return _OCR_ENGINE
-
-
-def ocr_pdf_pages(pdf_bytes, page_indices):
-    if not page_indices:
-        return {}
-
-    try:
-        import pymupdf
-        import numpy as np
-        from PIL import Image
-    except Exception as exc:
-        raise RuntimeError(
-            "OCR dependencies are unavailable on the server."
-        ) from exc
-
-    engine = get_ocr_engine()
-    document = pymupdf.open(
-        stream=pdf_bytes,
-        filetype="pdf"
-    )
-    results = {}
-
-    try:
-        for page_index in page_indices:
-            if page_index < 0 or page_index >= document.page_count:
-                continue
-
-            page = document.load_page(page_index)
-            pixmap = page.get_pixmap(
-                matrix=pymupdf.Matrix(1.2, 1.2),
-                alpha=False
-            )
-
-            image = Image.open(
-                io.BytesIO(pixmap.tobytes("png"))
-            ).convert("RGB")
-            image_array = np.asarray(image)
-
-            try:
-                ocr_result, _ = engine(image_array)
-            except Exception:
-                ocr_result = None
-
-            lines = []
-            for item in (ocr_result or []):
-                if not isinstance(item, (list, tuple)) or len(item) < 2:
-                    continue
-
-                value = str(item[1]).strip()
-                if not value:
-                    continue
-
-                confidence = 1.0
-                if len(item) >= 3:
-                    try:
-                        confidence = float(item[2])
-                    except (TypeError, ValueError):
-                        confidence = 1.0
-
-                if confidence >= 0.35:
-                    lines.append(value)
-
-            results[page_index] = " ".join(lines)
-
-    finally:
-        document.close()
-
-    return results
-
-
-def extract_and_merge_pdfs(files):
-    combined_text_parts = []
-    writer = PdfWriter()
-    total_pages = 0
-    accepted_files = []
-    ocr_pages_used = 0
-    ocr_warning = None
+def merge_uploaded_pdfs(files):
+    payloads = []
 
     for uploaded in files:
         if not uploaded or not uploaded.filename:
             continue
+
         if not allowed_pdf(uploaded.filename):
             raise ValueError("Only PDF files are allowed.")
 
@@ -3154,11 +3192,16 @@ def extract_and_merge_pdfs(files):
         if not raw:
             continue
 
+        safe_name = secure_filename(
+            uploaded.filename
+        ) or "attachment.pdf"
+
         try:
             reader = PdfReader(io.BytesIO(raw))
+            page_count = len(reader.pages)
         except Exception as exc:
             raise ValueError(
-                f"Could not read PDF: {secure_filename(uploaded.filename)}"
+                f"Could not read PDF: {safe_name}"
             ) from exc
 
         if reader.is_encrypted:
@@ -3166,109 +3209,49 @@ def extract_and_merge_pdfs(files):
                 reader.decrypt("")
             except Exception as exc:
                 raise ValueError(
-                    f"Encrypted PDF is not supported: {secure_filename(uploaded.filename)}"
+                    f"Encrypted PDF is not supported: {safe_name}"
                 ) from exc
 
-        accepted_files.append(
-            secure_filename(uploaded.filename) or "attachment.pdf"
-        )
+        if page_count < 1:
+            continue
 
-        page_texts = {}
-        image_only_pages = []
+        payloads.append({
+            "name": safe_name,
+            "bytes": raw,
+            "pages": page_count
+        })
 
-        for page_index, page in enumerate(reader.pages):
-            total_pages += 1
-
-            # Avoid expensive pypdf text parsing on image-heavy/scanned pages.
-            # If a page contains images and very little structured text metadata,
-            # route it directly to OCR instead of risking a Gunicorn timeout.
-            page_text = ""
-            try:
-                resources = page.get("/Resources") or {}
-                has_xobject = bool(resources.get("/XObject"))
-            except Exception:
-                has_xobject = False
-
-            if not has_xobject:
-                try:
-                    page_text = page.extract_text() or ""
-                except Exception:
-                    page_text = ""
-
-            page_text = page_text.strip()
-            page_texts[page_index] = page_text
-
-            if len(page_text) < OCR_MIN_PAGE_TEXT:
-                image_only_pages.append(page_index)
-
-            writer.add_page(page)
-
-        remaining_ocr_pages = max(
-            0,
-            OCR_MAX_PAGES - ocr_pages_used
-        )
-
-        if image_only_pages and remaining_ocr_pages > 0:
-            pages_to_ocr = image_only_pages[:remaining_ocr_pages]
-
-            try:
-                ocr_results = ocr_pdf_pages(
-                    raw,
-                    pages_to_ocr
-                )
-                ocr_pages_used += len(pages_to_ocr)
-
-                for page_index, ocr_text in ocr_results.items():
-                    if len(ocr_text.strip()) > len(
-                        page_texts.get(page_index, "").strip()
-                    ):
-                        page_texts[page_index] = ocr_text.strip()
-
-            except RuntimeError as exc:
-                ocr_warning = str(exc)
-
-        for page_index in sorted(page_texts):
-            page_text = page_texts[page_index].strip()
-            if page_text:
-                combined_text_parts.append(page_text)
-
-    if not accepted_files or total_pages == 0:
+    if not payloads:
         raise ValueError("No readable PDF pages were uploaded.")
 
-    extracted_text = "\n".join(combined_text_parts)
+    # Most referrals contain one PDF. Keep its original bytes unchanged
+    # instead of rewriting every page on the small Render instance.
+    if len(payloads) == 1:
+        item = payloads[0]
+        return {
+            "pdf_bytes": item["bytes"],
+            "page_count": item["pages"],
+            "file_count": 1,
+            "filename": item["name"]
+        }
 
-    if len(normalize_text(extracted_text)) < 80:
-        if ocr_warning:
-            raise ValueError(
-                "The PDF appears to be scanned, but OCR could not run: "
-                + ocr_warning
-            )
+    writer = PdfWriter()
+    total_pages = 0
 
-        if ocr_pages_used >= OCR_MAX_PAGES:
-            raise ValueError(
-                "OCR ran, but not enough readable text was found within "
-                f"the first {OCR_MAX_PAGES} scanned pages."
-            )
-
-        raise ValueError(
-            "OCR ran, but the document still does not contain enough "
-            "readable clinical text for safe automatic routing."
-        )
+    for item in payloads:
+        reader = PdfReader(io.BytesIO(item["bytes"]))
+        for page in reader.pages:
+            writer.add_page(page)
+            total_pages += 1
 
     output = io.BytesIO()
     writer.write(output)
 
     return {
-        "text": extracted_text,
         "pdf_bytes": output.getvalue(),
         "page_count": total_pages,
-        "file_count": len(accepted_files),
-        "ocr_pages": ocr_pages_used,
-        "filename": (
-            accepted_files[0]
-            if len(accepted_files) == 1
-            else "ACT_Smart_Referral_Combined.pdf"
-        )
+        "file_count": len(payloads),
+        "filename": "ACT_Smart_Referral_Combined.pdf"
     }
 
 
@@ -3482,6 +3465,17 @@ def doctor_call_smart_referral():
     ]
     case_no = request.form.get("case_no", "").strip()
     patient_ref = request.form.get("patient_ref", "").strip()
+    client_text = request.form.get(
+        "client_extracted_text",
+        ""
+    ).strip()
+    try:
+        client_ocr_pages = max(
+            0,
+            int(request.form.get("client_ocr_pages", "0") or 0)
+        )
+    except (TypeError, ValueError):
+        client_ocr_pages = 0
 
     if not files:
         return redirect(url_for(
@@ -3489,8 +3483,17 @@ def doctor_call_smart_referral():
             message="Please upload at least one PDF."
         ))
 
+    if len(normalize_text(client_text)) < 80:
+        return redirect(url_for(
+            "doctor_call_insurance",
+            message=(
+                "Smart Referral stopped: browser extraction did not return "
+                "enough clinical text. Refresh the page or use Manual Referral."
+            )
+        ))
+
     try:
-        merged = extract_and_merge_pdfs(files)
+        merged = merge_uploaded_pdfs(files)
     except ValueError as exc:
         return redirect(url_for(
             "doctor_call_insurance",
@@ -3521,7 +3524,7 @@ def doctor_call_smart_referral():
     """).fetchall()
 
     routing = detect_specialty_and_doctor(
-        merged["text"],
+        client_text,
         doctors
     )
 
@@ -3535,7 +3538,9 @@ def doctor_call_smart_referral():
     if not case_no:
         case_no = "AUTO-" + now_dt().strftime("%Y%m%d-%H%M%S")
 
-    safe_name = secure_filename(merged["filename"]) or "smart_referral.pdf"
+    safe_name = secure_filename(
+        merged["filename"]
+    ) or "smart_referral.pdf"
     stamped = f"{int(datetime.now().timestamp())}_{safe_name}"
     sent_time = now_text()
 
@@ -3603,7 +3608,10 @@ def doctor_call_smart_referral():
         routing["doctor_username"]
     )
 
-    matched_terms = ", ".join(routing["matches"]) or "clinical pattern"
+    matched_terms = ", ".join(
+        routing["matches"]
+    ) or "clinical pattern"
+
     device_note = (
         f" Push delivered to {push_result['sent']} of "
         f"{push_result['registered']} registered device(s)."
@@ -3615,8 +3623,9 @@ def doctor_call_smart_referral():
         f"🤖 Smart Referral: {case_no} → {routing['specialty']} → "
         f"{routing['doctor_display']}. "
         f"Matched: {matched_terms}. "
-        f"Merged {merged['file_count']} PDF(s), {merged['page_count']} page(s). "
-        f"OCR processed {merged['ocr_pages']} scanned page(s)."
+        f"Merged {merged['file_count']} PDF(s), "
+        f"{merged['page_count']} page(s). "
+        f"Browser OCR processed {client_ocr_pages} scanned page(s)."
         + device_note
     )
 
