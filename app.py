@@ -216,7 +216,7 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
   {% if message %}<div id="flashNotice" class="notice">{{ message }}</div>{% endif %}
 
   <div class="card smart-card">
-    <span class="beta">BETA v3.7.1 · DOCTOR LOGIN FIX</span>
+    <span class="beta">BETA v3.8 · AUTO + MANUAL SEND</span>
     <h2 style="margin:10px 0 6px">🤖 Smart Referral</h2>
     <div class="help">
       Upload the report once. ACT reads it, routes it automatically when confident, or keeps the same file ready so Insurance can choose the specialty and doctor manually.
@@ -246,7 +246,7 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
       </div>
 
       <div id="manualFallback" class="fallback">
-        <div class="fallback-title">Manual fallback</div>
+        <div class="fallback-title">Manual Send / Fallback</div>
         <div id="fallbackReason" class="help">
           If automatic routing cannot identify the specialty, choose it here and select the doctor from the existing Doctors Directory.
         </div>
@@ -282,7 +282,10 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
 
       <div id="smartProgress" class="progress"></div>
       <div style="margin-top:14px">
-        <button id="smartSubmit" class="btn smart" type="submit">Analyze & Auto-Send 🔔</button>
+        <div class="actions">
+          <button id="smartSubmit" class="btn smart" type="submit">Analyze & Auto-Send 🔔</button>
+          <button id="manualOpen" class="btn primary" type="button">Manual Send ✋</button>
+        </div>
       </div>
     </form>
   </div>
@@ -319,6 +322,7 @@ const fallbackDoctor=document.getElementById("fallbackDoctor");
 const detectedSpecialtyBox=document.getElementById("detectedSpecialtyBox");
 const flashNotice=document.getElementById("flashNotice");
 const manualSend=document.getElementById("manualSend");
+const manualOpen=document.getElementById("manualOpen");
 const manualSpecialtyValue=document.getElementById("manualSpecialtyValue");
 const manualDoctorValue=document.getElementById("manualDoctorValue");
 
@@ -631,8 +635,24 @@ smartForm.addEventListener("submit",async event=>{
   await postReferral(false);
 });
 
+manualOpen.addEventListener("click",()=>{
+  clearOldResult();
+
+  if(!smartPdfs.files.length){
+    progress("Choose at least one PDF first, then select specialty and doctor.");
+  }else{
+    progress("Manual mode ready. Choose specialty and doctor below.");
+  }
+
+  fallbackReason.textContent=
+    "Manual Send: choose the specialty and doctor yourself. " +
+    "ACT will send the same selected PDF directly without automatic routing.";
+  fallbackBox.classList.add("show");
+  fallbackBox.scrollIntoView({behavior:"smooth",block:"center"});
+});
+
 manualSend.addEventListener("click",async ()=>{
-  // Manual fallback can send even when OCR/text extraction was insufficient.
+  // Manual Send is always available to Insurance and Admin.
   await postReferral(true);
 });
 </script>
