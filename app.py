@@ -214,7 +214,7 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
   {% if message %}<div class="notice">{{ message }}</div>{% endif %}
 
   <div class="card smart-card">
-    <span class="beta">BETA v3.6 · UNIFIED REFERRAL</span>
+    <span class="beta">BETA v3.6.1 · SAFE ROUTING</span>
     <h2 style="margin:10px 0 6px">🤖 Smart Referral</h2>
     <div class="help">
       Upload the report once. ACT reads it, routes it automatically when confident, or keeps the same file ready so Insurance can choose the specialty and doctor manually.
@@ -3640,6 +3640,17 @@ def merge_uploaded_pdfs(files):
     }
 
 
+ROUTING_WEAK_TERMS = {
+    "ecg", "ekg", "troponin", "spo2", "oxygen saturation",
+    "creatinine", "fever", "infection", "hypertension"
+}
+
+ROUTING_STRONG_ABBREVIATIONS = {
+    "acs", "stemi", "nstemi", "afib", "cva", "tia", "sah",
+    "aki", "ckd", "esrd", "dka", "copd", "ild", "bph", "sle"
+}
+
+
 def keyword_in_text(text, keyword):
     keyword = normalize_text(keyword)
     if not keyword:
@@ -3652,23 +3663,35 @@ def keyword_in_text(text, keyword):
 def specialty_rule_score(text, rule):
     score = 0
     matches = []
+    strong_matches = []
 
     for keyword in rule["keywords"]:
-        if keyword_in_text(text, keyword):
-            words = len(keyword.split())
-            if words >= 3:
-                weight = 4
-            elif words == 2:
-                weight = 3
-            elif len(keyword) <= 4:
-                weight = 2
-            else:
-                weight = 2
+        if not keyword_in_text(text, keyword):
+            continue
 
-            score += weight
-            matches.append(keyword)
+        normalized = normalize_text(keyword)
+        words = len(normalized.split())
 
-    return score, matches
+        if normalized in ROUTING_WEAK_TERMS:
+            weight = 1
+        elif normalized in ROUTING_STRONG_ABBREVIATIONS:
+            weight = 4
+            strong_matches.append(keyword)
+        elif words >= 3:
+            weight = 4
+            strong_matches.append(keyword)
+        elif words == 2:
+            weight = 3
+            strong_matches.append(keyword)
+        else:
+            weight = 2
+            if len(normalized) >= 7:
+                strong_matches.append(keyword)
+
+        score += weight
+        matches.append(keyword)
+
+    return score, matches, strong_matches
 
 
 def doctor_matches_specialty(doctor_specialty, canonical_specialty):
@@ -3685,8 +3708,6 @@ def doctor_matches_specialty(doctor_specialty, canonical_specialty):
         if normalized == alias_normalized:
             return True
 
-        # Allow labels such as "Cardiology Consultant" without treating
-        # "Neurosurgery" as "General Surgery" or other substring collisions.
         if keyword_in_text(normalized, alias_normalized):
             return True
 
@@ -3717,66 +3738,53 @@ def detect_specialty_and_doctor(report_text, doctors):
         }
 
     active_doctors = list(doctors)
-    if not active_doctors:
-        return {
-            "ok": False,
-            "reason": "No active doctors are configured."
-        }
-
     scored = []
 
-    # Score only specialty families that actually have an active doctor
-    # in the current Doctors Directory.
+    # First determine the specialty from the clinical report itself.
+    # Do NOT restrict scoring to specialties that currently have a doctor.
     for specialty, rule in SMART_REFERRAL_RULES.items():
-        candidates = [
-            d for d in active_doctors
-            if doctor_matches_specialty(d["specialty"], specialty)
-        ]
-        if not candidates:
-            continue
+        score, matches, strong_matches = specialty_rule_score(text, rule)
 
-        score, matches = specialty_rule_score(text, rule)
         if score > 0:
             scored.append({
                 "score": score,
                 "specialty": specialty,
                 "matches": matches,
-                "doctors": candidates
+                "strong_matches": strong_matches
             })
 
-    # Also recognize an exact specialty name written in the report,
-    # including custom specialties entered by Admin.
+    # Exact specialty wording in the report is strong evidence, including
+    # custom specialty labels entered by Admin.
     for d in active_doctors:
         actual_specialty = normalize_text(d["specialty"])
-        if len(actual_specialty) >= 4 and keyword_in_text(text, actual_specialty):
+        if len(actual_specialty) < 4:
+            continue
+
+        if keyword_in_text(text, actual_specialty):
             existing = next(
                 (
                     item for item in scored
-                    if any(
-                        normalize_text(cd["specialty"]) == actual_specialty
-                        for cd in item["doctors"]
-                    )
+                    if normalize_text(item["specialty"]) == actual_specialty
                 ),
                 None
             )
+
             if existing:
-                existing["score"] += 5
+                existing["score"] += 6
                 existing["matches"].append(d["specialty"])
+                existing["strong_matches"].append(d["specialty"])
             else:
-                same_specialty = [
-                    x for x in active_doctors
-                    if normalize_text(x["specialty"]) == actual_specialty
-                ]
                 scored.append({
-                    "score": 5,
+                    "score": 6,
                     "specialty": d["specialty"],
                     "matches": [d["specialty"]],
-                    "doctors": same_specialty
+                    "strong_matches": [d["specialty"]]
                 })
 
     scored.sort(
         key=lambda item: (
             item["score"],
+            len(item["strong_matches"]),
             len(item["matches"])
         ),
         reverse=True
@@ -3786,39 +3794,63 @@ def detect_specialty_and_doctor(report_text, doctors):
         return {
             "ok": False,
             "reason": (
-                "The report was read, but no matching specialty from the "
-                "active Doctors Directory was found."
+                "ACT read the report but could not identify a specialty "
+                "confidently."
             )
         }
 
     best = scored[0]
-    second_score = scored[1]["score"] if len(scored) > 1 else 0
+    second = scored[1] if len(scored) > 1 else None
+    second_score = second["score"] if second else 0
 
-    # Specific multi-word/abbreviation evidence is enough to route.
-    # Only stop when two specialties are genuinely tied at the top.
-    if second_score == best["score"] and best["score"] < 6:
-        top_names = ", ".join(
-            item["specialty"] for item in scored[:3]
-            if item["score"] == best["score"]
+    # Weak screening/lab terms such as ECG or troponin must never route a
+    # case by themselves. Require either one strong clinical match or a
+    # clearly supported score.
+    if not best["strong_matches"] and best["score"] < 4:
+        return {
+            "ok": False,
+            "reason": (
+                "ACT found only nonspecific tests or findings "
+                f"({', '.join(best['matches'][:4])}) and cannot choose "
+                "a specialty safely."
+            )
+        }
+
+    # If the two leading specialties are too close, ask Insurance instead
+    # of forcing a wrong referral.
+    if second and (
+        best["score"] == second_score
+        or (
+            best["score"] - second_score <= 1
+            and second_score >= 4
         )
+    ):
         return {
             "ok": False,
             "reason": (
-                "Routing is still ambiguous between: "
-                + top_names
-                + ". Please use Manual Referral for this case."
+                "Routing is ambiguous between "
+                f"{best['specialty']} and {second['specialty']}."
             )
         }
 
-    selected = select_least_busy_doctor(best["doctors"])
-    if not selected:
+    candidates = [
+        d for d in active_doctors
+        if doctor_matches_specialty(d["specialty"], best["specialty"])
+    ]
+
+    if not candidates:
         return {
             "ok": False,
             "reason": (
-                f"Detected {best['specialty']}, but no active doctor "
-                "is available in that specialty."
-            )
+                f"ACT detected {best['specialty']}, but there is no active "
+                "doctor in that specialty. Choose the specialty and doctor "
+                "manually."
+            ),
+            "detected_specialty": best["specialty"],
+            "matches": best["matches"][:8]
         }
+
+    selected = select_least_busy_doctor(candidates)
 
     return {
         "ok": True,
