@@ -3701,6 +3701,75 @@ def detect_specialty_and_doctor(report_text, doctors):
     }
 
 
+def send_push_payload(username, payload):
+    ensure_vapid_keys()
+    conn = get_db()
+    subscriptions = conn.execute("""
+        SELECT endpoint, subscription_json
+        FROM push_subscriptions
+        WHERE username = ?
+    """, (username,)).fetchall()
+    conn.close()
+
+    dead_endpoints = []
+    sent = 0
+
+    for row in subscriptions:
+        try:
+            webpush(
+                subscription_info=json.loads(row["subscription_json"]),
+                data=json.dumps(payload),
+                vapid_private_key=str(VAPID_RUNTIME_PRIVATE_FILE),
+                vapid_claims={"sub": "mailto:act-doctor-call@example.com"},
+                timeout=10
+            )
+            sent += 1
+        except WebPushException as exc:
+            code = getattr(
+                getattr(exc, "response", None),
+                "status_code",
+                None
+            )
+            if code in (404, 410):
+                dead_endpoints.append(row["endpoint"])
+            else:
+                print("Doctor Call push error:", exc)
+        except Exception as exc:
+            print("Doctor Call push error:", exc)
+
+    if dead_endpoints:
+        conn = get_db()
+        for endpoint in dead_endpoints:
+            conn.execute(
+                "DELETE FROM push_subscriptions WHERE endpoint = ?",
+                (endpoint,)
+            )
+        conn.commit()
+        conn.close()
+
+    return {
+        "registered": len(subscriptions),
+        "sent": sent
+    }
+
+
+def send_case_push(case_id, case_no, specialty, doctor_username):
+    payload = {
+        "title": "🔔 ACT Doctor Call — Review Required",
+        "body": f"{specialty} case {case_no} is waiting for review.",
+        "url": f"/doctor-call/case/{case_id}",
+        "case_id": case_id,
+        "case_no": case_no,
+        "specialty": specialty
+    }
+    return send_push_payload(doctor_username, payload)
+
+
+# =========================
+# DOCTOR CALL ROUTES
+# =========================
+
+
 @app.route("/doctor-call")
 @login_required
 def doctor_call_insurance():
