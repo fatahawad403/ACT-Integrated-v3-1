@@ -182,6 +182,10 @@ input,select{width:100%;padding:12px;border:1px solid #d5dae2;border-radius:10px
 .help{color:#6b7280;font-size:13px;line-height:1.5;margin-top:8px}
 .progress{display:none;margin-top:12px;padding:12px;border-radius:10px;background:#f3e8ff;color:#5b21b6;font-size:13px;line-height:1.5}
 .progress.show{display:block}
+.fallback{display:none;margin-top:14px;padding:14px;border:1px solid #f1c98d;border-radius:12px;background:#fff8eb}
+.fallback.show{display:block}
+.fallback-title{font-weight:800;margin-bottom:6px}
+.fallback .help{margin-bottom:12px}
 table{width:100%;border-collapse:collapse}
 th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #e5e7eb;font-size:14px}
 th{color:#6b7280;font-size:12px;text-transform:uppercase}
@@ -210,15 +214,17 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
   {% if message %}<div class="notice">{{ message }}</div>{% endif %}
 
   <div class="card smart-card">
-    <span class="beta">BETA v3.5.1 · FULL REPORT ROUTING</span>
+    <span class="beta">BETA v3.6 · UNIFIED REFERRAL</span>
     <h2 style="margin:10px 0 6px">🤖 Smart Referral</h2>
     <div class="help">
-      PDF text and scanned pages are read on this device before upload. Render receives the original PDF plus the extracted text for routing, so the free server stays stable.
+      Upload the report once. ACT reads it, routes it automatically when confident, or keeps the same file ready so Insurance can choose the specialty and doctor manually.
     </div>
 
     <form id="smartReferralForm" method="post" action="/doctor-call/smart-referral" enctype="multipart/form-data" style="margin-top:16px">
       <input type="hidden" id="clientExtractedText" name="client_extracted_text">
       <input type="hidden" id="clientOcrPages" name="client_ocr_pages" value="0">
+      <input type="hidden" id="manualSpecialtyValue" name="manual_specialty">
+      <input type="hidden" id="manualDoctorValue" name="manual_doctor_username">
       <div class="grid">
         <div>
           <label>Case No. (optional)</label>
@@ -236,36 +242,45 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
           </div>
         </div>
       </div>
+
+      <div id="manualFallback" class="fallback">
+        <div class="fallback-title">Manual fallback</div>
+        <div id="fallbackReason" class="help">
+          If automatic routing cannot identify the specialty, choose it here and select the doctor from the existing Doctors Directory.
+        </div>
+        <div class="grid">
+          <div>
+            <label>Specialty *</label>
+            <select id="fallbackSpecialty">
+              <option value="">Choose specialty</option>
+              {% for specialty in specialties %}
+              <option value="{{ specialty }}">{{ specialty }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label>Doctor *</label>
+            <select id="fallbackDoctor">
+              <option value="">Choose doctor</option>
+              {% for d in doctors %}
+              <option value="{{ d['username'] }}" data-specialty="{{ d['specialty'] }}">
+                {{ d['display_name'] }} — {{ d['specialty'] }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <button id="manualSend" class="btn primary" type="button">
+            Send to Selected Doctor 🔔
+          </button>
+        </div>
+      </div>
+
       <div id="smartProgress" class="progress"></div>
       <div style="margin-top:14px">
         <button id="smartSubmit" class="btn smart" type="submit">Analyze & Auto-Send 🔔</button>
       </div>
-    </form>
-  </div>
-
-  <div class="card">
-    <h2 style="margin-top:0">Manual Referral</h2>
-    <form method="post" action="/doctor-call/new" enctype="multipart/form-data">
-      <div class="grid">
-        <div><label>Case No. *</label><input name="case_no" required></div>
-        <div><label>Patient Ref.</label><input name="patient_ref" placeholder="Demo reference only"></div>
-        <div>
-          <label>Specialty *</label>
-          <select id="specialty" name="specialty" required>
-            <option value="">Choose specialty</option>
-            {% for specialty in specialties %}<option value="{{ specialty }}">{{ specialty }}</option>{% endfor %}
-          </select>
-        </div>
-        <div>
-          <label>Doctor *</label>
-          <select id="doctor" name="doctor_username" required>
-            <option value="">Choose doctor</option>
-            {% for d in doctors %}<option value="{{ d['username'] }}" data-specialty="{{ d['specialty'] }}">{{ d['display_name'] }} — {{ d['specialty'] }}</option>{% endfor %}
-          </select>
-        </div>
-        <div style="grid-column:1/-1"><label>Medical File PDF *</label><input type="file" name="pdf" accept="application/pdf" required></div>
-      </div>
-      <div style="margin-top:14px"><button class="btn primary">Send to Doctor 🔔</button></div>
     </form>
   </div>
 
@@ -294,17 +309,37 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
 </div>
 
 <script>
-const specialty=document.getElementById("specialty");
-const doctor=document.getElementById("doctor");
-function filterDoctors(){
-  const s=specialty.value;
-  doctor.value="";
-  [...doctor.options].forEach((o,i)=>{
+const fallbackBox=document.getElementById("manualFallback");
+const fallbackReason=document.getElementById("fallbackReason");
+const fallbackSpecialty=document.getElementById("fallbackSpecialty");
+const fallbackDoctor=document.getElementById("fallbackDoctor");
+const manualSend=document.getElementById("manualSend");
+const manualSpecialtyValue=document.getElementById("manualSpecialtyValue");
+const manualDoctorValue=document.getElementById("manualDoctorValue");
+
+function filterFallbackDoctors(){
+  const s=fallbackSpecialty.value;
+  fallbackDoctor.value="";
+  [...fallbackDoctor.options].forEach((o,i)=>{
     if(i===0)return;
     o.hidden=!!s&&o.dataset.specialty!==s;
   });
 }
-specialty.addEventListener("change",filterDoctors);
+fallbackSpecialty.addEventListener("change",filterFallbackDoctors);
+
+function showFallback(reason){
+  if(reason) fallbackReason.textContent=reason;
+  fallbackBox.classList.add("show");
+  fallbackBox.scrollIntoView({behavior:"smooth",block:"center"});
+}
+
+function hideFallback(){
+  fallbackBox.classList.remove("show");
+  fallbackSpecialty.value="";
+  fallbackDoctor.value="";
+  manualSpecialtyValue.value="";
+  manualDoctorValue.value="";
+}
 
 const smartForm=document.getElementById("smartReferralForm");
 const smartPdfs=document.getElementById("smartPdfs");
@@ -408,17 +443,20 @@ async function readPdfOnDevice(file, state){
   return chunks.join("\\n");
 }
 
-smartForm.addEventListener("submit",async event=>{
-  if(smartForm.dataset.ready==="1") return;
+let extractionReady=false;
 
-  event.preventDefault();
+async function prepareReportText(){
+  if(extractionReady) return true;
 
   const files=[...smartPdfs.files];
-  if(!files.length) return;
+  if(!files.length){
+    progress("Please choose at least one PDF.");
+    return false;
+  }
 
   smartSubmit.disabled=true;
   smartSubmit.textContent="Reading report...";
-  progress("Preparing Smart Referral on this device...");
+  progress("Preparing referral on this device...");
 
   try{
     if(!window.pdfjsLib){
@@ -434,25 +472,118 @@ smartForm.addEventListener("submit",async event=>{
     }
 
     const combined=texts.join("\\n");
-    if(combined.replace(/\s+/g," ").trim().length<80){
-      throw new Error(
-        "Not enough readable clinical text was found. Please use Manual Referral for this file."
-      );
-    }
-
     clientText.value=combined.slice(0,60000);
     clientOcrPages.value=String(state.ocrPages);
-    smartForm.dataset.ready="1";
-    progress("Analysis text ready. Sending securely to ACT...");
-    smartSubmit.textContent="Sending...";
-    smartForm.submit();
+    extractionReady=true;
+
+    if(combined.replace(/\s+/g," ").trim().length<80){
+      progress("ACT could not read enough clinical text for automatic routing.");
+      showFallback(
+        "ACT could not read enough clinical text to route automatically. " +
+        "Choose the specialty and doctor below; the same PDF will be sent."
+      );
+      smartSubmit.disabled=false;
+      smartSubmit.textContent="Try Auto Routing Again 🔁";
+      return false;
+    }
+
+    return true;
 
   }catch(err){
     console.error(err);
-    progress("Smart Referral stopped: "+(err.message||"Could not read the PDF."));
+    progress("Automatic reading stopped: "+(err.message||"Could not read the PDF."));
+    showFallback(
+      "Automatic reading could not complete. Choose the specialty and doctor below; " +
+      "you do not need to upload the report again."
+    );
+    smartSubmit.disabled=false;
+    smartSubmit.textContent="Try Auto Routing Again 🔁";
+    return false;
+  }
+}
+
+async function postReferral(manualMode){
+  const formData=new FormData(smartForm);
+
+  if(manualMode){
+    const specialty=fallbackSpecialty.value;
+    const doctor=fallbackDoctor.value;
+
+    if(!specialty || !doctor){
+      progress("Choose both specialty and doctor.");
+      return;
+    }
+
+    manualSpecialtyValue.value=specialty;
+    manualDoctorValue.value=doctor;
+    formData.set("manual_specialty",specialty);
+    formData.set("manual_doctor_username",doctor);
+    manualSend.disabled=true;
+    manualSend.textContent="Sending...";
+    progress("Sending the same report to the selected doctor...");
+  }else{
+    manualSpecialtyValue.value="";
+    manualDoctorValue.value="";
+    formData.set("manual_specialty","");
+    formData.set("manual_doctor_username","");
+    smartSubmit.disabled=true;
+    smartSubmit.textContent="Routing...";
+    progress("ACT is matching the report to the Doctors Directory...");
+  }
+
+  try{
+    const response=await fetch("/doctor-call/smart-referral",{
+      method:"POST",
+      body:formData,
+      headers:{"X-Requested-With":"fetch"}
+    });
+
+    const data=await response.json();
+
+    if(data.ok){
+      progress(data.message||"Case sent successfully.");
+      window.location.href=data.redirect_url||"/doctor-call";
+      return;
+    }
+
+    if(data.fallback){
+      progress("Automatic routing needs your selection.");
+      showFallback(data.reason||"Choose specialty and doctor.");
+    }else{
+      progress(data.error||"Referral could not be completed.");
+    }
+
+  }catch(err){
+    console.error(err);
+    progress("Could not contact ACT. Please try again.");
+  }finally{
     smartSubmit.disabled=false;
     smartSubmit.textContent="Analyze & Auto-Send 🔔";
+    manualSend.disabled=false;
+    manualSend.textContent="Send to Selected Doctor 🔔";
   }
+}
+
+smartPdfs.addEventListener("change",()=>{
+  extractionReady=false;
+  clientText.value="";
+  clientOcrPages.value="0";
+  hideFallback();
+});
+
+smartForm.addEventListener("submit",async event=>{
+  event.preventDefault();
+  hideFallback();
+
+  const ready=await prepareReportText();
+  if(!ready) return;
+
+  await postReferral(false);
+});
+
+manualSend.addEventListener("click",async ()=>{
+  // Manual fallback can send even when OCR/text extraction was insufficient.
+  await postReferral(true);
 });
 </script>
 </body>
@@ -3812,6 +3943,24 @@ def doctor_call_smart_referral():
     if session.get("role") not in ("insurance", "admin"):
         return redirect(landing_url())
 
+    wants_json = (
+        request.headers.get("X-Requested-With", "").lower() == "fetch"
+    )
+
+    def fail(message, fallback=False, status=400):
+        if wants_json:
+            return jsonify({
+                "ok": False,
+                "fallback": bool(fallback),
+                "reason": message if fallback else None,
+                "error": None if fallback else message
+            }), status
+
+        return redirect(url_for(
+            "doctor_call_insurance",
+            message=message
+        ))
+
     files = [
         f for f in request.files.getlist("pdfs")
         if f and f.filename
@@ -3822,6 +3971,15 @@ def doctor_call_smart_referral():
         "client_extracted_text",
         ""
     ).strip()
+    manual_specialty = request.form.get(
+        "manual_specialty",
+        ""
+    ).strip()
+    manual_doctor_username = request.form.get(
+        "manual_doctor_username",
+        ""
+    ).strip()
+
     try:
         client_ocr_pages = max(
             0,
@@ -3831,27 +3989,12 @@ def doctor_call_smart_referral():
         client_ocr_pages = 0
 
     if not files:
-        return redirect(url_for(
-            "doctor_call_insurance",
-            message="Please upload at least one PDF."
-        ))
-
-    if len(normalize_text(client_text)) < 80:
-        return redirect(url_for(
-            "doctor_call_insurance",
-            message=(
-                "Smart Referral stopped: browser extraction did not return "
-                "enough clinical text. Refresh the page or use Manual Referral."
-            )
-        ))
+        return fail("Please upload at least one PDF.")
 
     try:
         merged = merge_uploaded_pdfs(files)
     except ValueError as exc:
-        return redirect(url_for(
-            "doctor_call_insurance",
-            message=f"Smart Referral stopped: {exc}"
-        ))
+        return fail(f"Could not prepare the PDF: {exc}")
 
     conn = get_db()
     doctors = conn.execute("""
@@ -3876,17 +4019,71 @@ def doctor_call_smart_referral():
         ORDER BY u.display_name
     """).fetchall()
 
-    routing = detect_specialty_and_doctor(
-        client_text,
-        doctors
+    manual_mode = bool(
+        manual_specialty or manual_doctor_username
     )
 
-    if not routing["ok"]:
-        conn.close()
-        return redirect(url_for(
-            "doctor_call_insurance",
-            message=f"Smart Referral stopped: {routing['reason']}"
-        ))
+    if manual_mode:
+        if not manual_specialty or not manual_doctor_username:
+            conn.close()
+            return fail(
+                "Choose both specialty and doctor.",
+                fallback=True
+            )
+
+        selected = next(
+            (
+                d for d in doctors
+                if d["username"] == manual_doctor_username
+            ),
+            None
+        )
+
+        if not selected:
+            conn.close()
+            return fail(
+                "Selected doctor is not active. Choose another doctor.",
+                fallback=True
+            )
+
+        if selected["specialty"] != manual_specialty:
+            conn.close()
+            return fail(
+                "Doctor and specialty do not match. Choose again.",
+                fallback=True
+            )
+
+        routing = {
+            "ok": True,
+            "specialty": selected["specialty"],
+            "doctor_username": selected["username"],
+            "doctor_display": selected["display_name"],
+            "pending_count": selected["pending_count"],
+            "matches": ["manual Insurance selection"],
+            "score": None
+        }
+
+    else:
+        if len(normalize_text(client_text)) < 80:
+            conn.close()
+            return fail(
+                "ACT could not read enough clinical text for automatic routing. "
+                "Choose the specialty and doctor manually below.",
+                fallback=True
+            )
+
+        routing = detect_specialty_and_doctor(
+            client_text,
+            doctors
+        )
+
+        if not routing["ok"]:
+            conn.close()
+            return fail(
+                routing["reason"]
+                + " Choose the specialty and doctor manually below.",
+                fallback=True
+            )
 
     if not case_no:
         case_no = "AUTO-" + now_dt().strftime("%Y%m%d-%H%M%S")
@@ -3961,9 +4158,14 @@ def doctor_call_smart_referral():
         routing["doctor_username"]
     )
 
-    matched_terms = ", ".join(
-        routing["matches"]
-    ) or "clinical pattern"
+    if manual_mode:
+        matched_terms = "manual Insurance selection"
+        route_label = "Manual Referral"
+    else:
+        matched_terms = ", ".join(
+            routing["matches"]
+        ) or "clinical pattern"
+        route_label = "Smart Referral"
 
     device_note = (
         f" Push delivered to {push_result['sent']} of "
@@ -3973,7 +4175,7 @@ def doctor_call_smart_referral():
     )
 
     message = (
-        f"🤖 Smart Referral: {case_no} → {routing['specialty']} → "
+        f"🤖 {route_label}: {case_no} → {routing['specialty']} → "
         f"{routing['doctor_display']}. "
         f"Matched: {matched_terms}. "
         f"Merged {merged['file_count']} PDF(s), "
@@ -3982,10 +4184,21 @@ def doctor_call_smart_referral():
         + device_note
     )
 
-    return redirect(url_for(
+    redirect_url = url_for(
         "doctor_call_insurance",
         message=message
-    ))
+    )
+
+    if wants_json:
+        return jsonify({
+            "ok": True,
+            "fallback": False,
+            "manual": manual_mode,
+            "message": message,
+            "redirect_url": redirect_url
+        })
+
+    return redirect(redirect_url)
 
 
 @app.route("/doctor-call/new", methods=["POST"])
