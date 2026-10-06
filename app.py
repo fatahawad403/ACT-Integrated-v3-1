@@ -378,7 +378,7 @@ async function readPdfOnDevice(file, state){
     canvas.height=1;
   }
 
-  return chunks.join("\n");
+  return chunks.join("\\n");
 }
 
 smartForm.addEventListener("submit",async event=>{
@@ -406,7 +406,7 @@ smartForm.addEventListener("submit",async event=>{
       if(text.trim()) texts.push(text.trim());
     }
 
-    const combined=texts.join("\n");
+    const combined=texts.join("\\n");
     if(combined.replace(/\s+/g," ").trim().length<80){
       throw new Error(
         "Not enough readable clinical text was found. Please use Manual Referral for this file."
