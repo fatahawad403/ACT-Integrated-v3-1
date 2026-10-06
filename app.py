@@ -216,7 +216,7 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
   {% if message %}<div id="flashNotice" class="notice">{{ message }}</div>{% endif %}
 
   <div class="card smart-card">
-    <span class="beta">BETA v3.8 · AUTO + MANUAL SEND</span>
+    <span class="beta">BETA v3.8.1 · DOCTOR SELF-SERVICE</span>
     <h2 style="margin:10px 0 6px">🤖 Smart Referral</h2>
     <div class="help">
       Upload the report once. ACT reads it, routes it automatically when confident, or keeps the same file ready so Insurance can choose the specialty and doctor manually.
@@ -693,7 +693,10 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}.badge{display:inline-b
       <h1>ACT Doctor Call</h1>
       <div class="sub">{{ display_name }} · {{ doctor_specialty }}</div>
     </div>
-    <div class="top-actions"><a class="btn light" href="/logout">Logout</a></div>
+    <div class="top-actions">
+      <a class="btn light" href="/change-password">Change Password</a>
+      <a class="btn light" href="/logout">Logout</a>
+    </div>
   </div>
 
   <div id="newCaseBanner" class="notice">
