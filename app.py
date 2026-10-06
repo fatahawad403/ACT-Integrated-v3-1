@@ -186,6 +186,8 @@ input,select{width:100%;padding:12px;border:1px solid #d5dae2;border-radius:10px
 .fallback.show{display:block}
 .fallback-title{font-weight:800;margin-bottom:6px}
 .fallback .help{margin-bottom:12px}
+.detected{display:none;margin:10px 0 12px;padding:10px 12px;border-radius:10px;background:#eef4ff;border:1px solid #c7d7ff;color:#244a9b;font-weight:800}
+.detected.show{display:block}
 table{width:100%;border-collapse:collapse}
 th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #e5e7eb;font-size:14px}
 th{color:#6b7280;font-size:12px;text-transform:uppercase}
@@ -211,10 +213,10 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
     </div>
   </div>
 
-  {% if message %}<div class="notice">{{ message }}</div>{% endif %}
+  {% if message %}<div id="flashNotice" class="notice">{{ message }}</div>{% endif %}
 
   <div class="card smart-card">
-    <span class="beta">BETA v3.6.1 · SAFE ROUTING</span>
+    <span class="beta">BETA v3.6.2 · GUIDED FALLBACK</span>
     <h2 style="margin:10px 0 6px">🤖 Smart Referral</h2>
     <div class="help">
       Upload the report once. ACT reads it, routes it automatically when confident, or keeps the same file ready so Insurance can choose the specialty and doctor manually.
@@ -248,6 +250,7 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
         <div id="fallbackReason" class="help">
           If automatic routing cannot identify the specialty, choose it here and select the doctor from the existing Doctors Directory.
         </div>
+        <div id="detectedSpecialtyBox" class="detected"></div>
         <div class="grid">
           <div>
             <label>Specialty *</label>
@@ -313,6 +316,8 @@ const fallbackBox=document.getElementById("manualFallback");
 const fallbackReason=document.getElementById("fallbackReason");
 const fallbackSpecialty=document.getElementById("fallbackSpecialty");
 const fallbackDoctor=document.getElementById("fallbackDoctor");
+const detectedSpecialtyBox=document.getElementById("detectedSpecialtyBox");
+const flashNotice=document.getElementById("flashNotice");
 const manualSend=document.getElementById("manualSend");
 const manualSpecialtyValue=document.getElementById("manualSpecialtyValue");
 const manualDoctorValue=document.getElementById("manualDoctorValue");
@@ -327,8 +332,46 @@ function filterFallbackDoctors(){
 }
 fallbackSpecialty.addEventListener("change",filterFallbackDoctors);
 
-function showFallback(reason){
+function clearOldResult(){
+  if(flashNotice){
+    flashNotice.style.display="none";
+  }
+  if(window.location.search.includes("message=")){
+    window.history.replaceState({},document.title,window.location.pathname);
+  }
+}
+
+function selectDetectedSpecialty(detectedSpecialty){
+  detectedSpecialtyBox.classList.remove("show");
+  detectedSpecialtyBox.textContent="";
+
+  if(!detectedSpecialty) return;
+
+  detectedSpecialtyBox.textContent="Detected Specialty: "+detectedSpecialty;
+  detectedSpecialtyBox.classList.add("show");
+
+  const wanted=detectedSpecialty.trim().toLowerCase();
+  const match=[...fallbackSpecialty.options].find(
+    o=>o.value && o.value.trim().toLowerCase()===wanted
+  );
+
+  if(match){
+    fallbackSpecialty.value=match.value;
+    filterFallbackDoctors();
+
+    const visibleDoctors=[...fallbackDoctor.options].filter(
+      (o,i)=>i>0 && !o.hidden
+    );
+
+    if(visibleDoctors.length===1){
+      fallbackDoctor.value=visibleDoctors[0].value;
+    }
+  }
+}
+
+function showFallback(reason,detectedSpecialty){
   if(reason) fallbackReason.textContent=reason;
+  selectDetectedSpecialty(detectedSpecialty);
   fallbackBox.classList.add("show");
   fallbackBox.scrollIntoView({behavior:"smooth",block:"center"});
 }
@@ -337,6 +380,8 @@ function hideFallback(){
   fallbackBox.classList.remove("show");
   fallbackSpecialty.value="";
   fallbackDoctor.value="";
+  detectedSpecialtyBox.classList.remove("show");
+  detectedSpecialtyBox.textContent="";
   manualSpecialtyValue.value="";
   manualDoctorValue.value="";
 }
@@ -548,7 +593,10 @@ async function postReferral(manualMode){
 
     if(data.fallback){
       progress("Automatic routing needs your selection.");
-      showFallback(data.reason||"Choose specialty and doctor.");
+      showFallback(
+        data.reason||"Choose specialty and doctor.",
+        data.detected_specialty||""
+      );
     }else{
       progress(data.error||"Referral could not be completed.");
     }
@@ -565,6 +613,7 @@ async function postReferral(manualMode){
 }
 
 smartPdfs.addEventListener("change",()=>{
+  clearOldResult();
   extractionReady=false;
   clientText.value="";
   clientOcrPages.value="0";
@@ -573,6 +622,7 @@ smartPdfs.addEventListener("change",()=>{
 
 smartForm.addEventListener("submit",async event=>{
   event.preventDefault();
+  clearOldResult();
   hideFallback();
 
   const ready=await prepareReportText();
@@ -3979,13 +4029,19 @@ def doctor_call_smart_referral():
         request.headers.get("X-Requested-With", "").lower() == "fetch"
     )
 
-    def fail(message, fallback=False, status=400):
+    def fail(
+        message,
+        fallback=False,
+        status=400,
+        detected_specialty=None
+    ):
         if wants_json:
             return jsonify({
                 "ok": False,
                 "fallback": bool(fallback),
                 "reason": message if fallback else None,
-                "error": None if fallback else message
+                "error": None if fallback else message,
+                "detected_specialty": detected_specialty
             }), status
 
         return redirect(url_for(
@@ -4112,9 +4168,9 @@ def doctor_call_smart_referral():
         if not routing["ok"]:
             conn.close()
             return fail(
-                routing["reason"]
-                + " Choose the specialty and doctor manually below.",
-                fallback=True
+                routing["reason"],
+                fallback=True,
+                detected_specialty=routing.get("detected_specialty")
             )
 
     if not case_no:
