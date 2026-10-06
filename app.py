@@ -8,6 +8,7 @@ import os
 import json
 import base64
 import io
+import re
 from pathlib import Path
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -209,7 +210,7 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
   {% if message %}<div class="notice">{{ message }}</div>{% endif %}
 
   <div class="card smart-card">
-    <span class="beta">BETA v3.4 · BROWSER OCR</span>
+    <span class="beta">BETA v3.5 · SMART ROUTING</span>
     <h2 style="margin:10px 0 6px">🤖 Smart Referral</h2>
     <div class="help">
       PDF text and scanned pages are read on this device before upload. Render receives the original PDF plus the extracted text for routing, so the free server stays stable.
@@ -231,7 +232,7 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
           <label>Medical report + attachments (PDF) *</label>
           <input id="smartPdfs" type="file" name="pdfs" accept="application/pdf" multiple required>
           <div class="help">
-            ACT checks up to the first 4 pages of each PDF. If a checked page has little/no text, Browser OCR is used on up to 2 scanned pages total.
+            ACT checks up to the first 6 pages of each PDF. If a checked page has little/no text, Browser OCR is used on up to 3 scanned pages total.
           </div>
         </div>
       </div>
@@ -325,7 +326,7 @@ function progress(msg){
 async function readPdfOnDevice(file, state){
   const data=new Uint8Array(await file.arrayBuffer());
   const pdf=await pdfjsLib.getDocument({data}).promise;
-  const pagesToCheck=Math.min(pdf.numPages,4);
+  const pagesToCheck=Math.min(pdf.numPages,6);
   const chunks=[];
 
   for(let p=1;p<=pagesToCheck;p++){
@@ -339,7 +340,7 @@ async function readPdfOnDevice(file, state){
       continue;
     }
 
-    if(state.ocrPages>=2 || !window.Tesseract){
+    if(state.ocrPages>=3 || !window.Tesseract){
       continue;
     }
 
@@ -3158,115 +3159,245 @@ def allowed_pdf(filename):
 
 SMART_REFERRAL_RULES = {
     "Cardiology": {
-        "aliases": ["cardiology", "cardiac", "heart"],
+        "aliases": [
+            "cardiology", "cardiac", "cardiologist", "heart"
+        ],
         "keywords": [
-            "chest pain", "acute coronary", "acs", "stemi", "nstemi",
-            "troponin", "myocardial infarction", "heart failure",
-            "arrhythmia", "atrial fibrillation", "afib", "ecg",
-            "coronary", "cardiogenic", "bradycardia", "tachycardia"
+            "chest pain", "angina", "acute coronary syndrome", "acs",
+            "stemi", "nstemi", "troponin", "elevated troponin",
+            "myocardial infarction", "ischemic heart disease",
+            "coronary artery disease", "cad", "heart failure",
+            "congestive heart failure", "chf", "cardiomyopathy",
+            "arrhythmia", "atrial fibrillation", "afib", "ecg", "ekg",
+            "bradycardia", "tachycardia", "palpitations", "pericarditis"
         ]
     },
     "Pulmonology": {
-        "aliases": ["pulmonology", "pulmonary", "respiratory", "chest"],
+        "aliases": [
+            "pulmonology", "pulmonary", "respiratory",
+            "chest medicine", "pulmonologist"
+        ],
         "keywords": [
-            "pneumonia", "asthma", "copd", "bronchiectasis",
-            "pleural effusion", "hemoptysis", "lung", "pulmonary",
-            "bronchitis", "respiratory distress"
+            "shortness of breath", "sob", "dyspnea", "hypoxia",
+            "hypoxemia", "spo2", "oxygen saturation", "pneumonia",
+            "asthma", "copd", "bronchiectasis", "pleural effusion",
+            "hemoptysis", "lung mass", "lung lesion", "pulmonary embolism",
+            "interstitial lung disease", "ild", "bronchitis",
+            "respiratory distress", "pulmonary edema"
         ]
     },
     "Neurology": {
-        "aliases": ["neurology", "neurologist", "neuro"],
+        "aliases": [
+            "neurology", "neurologist", "neuro"
+        ],
         "keywords": [
-            "stroke", "cva", "ischemic stroke", "seizure", "epilepsy",
-            "hemiparesis", "hemiplegia", "facial weakness", "aphasia",
-            "multiple sclerosis", "neuropathy", "migraine"
+            "stroke", "cva", "tia", "ischemic stroke", "seizure",
+            "epilepsy", "hemiparesis", "hemiplegia", "facial droop",
+            "facial weakness", "aphasia", "dysarthria",
+            "multiple sclerosis", "neuropathy", "migraine",
+            "status epilepticus", "encephalopathy"
         ]
     },
     "Neurosurgery": {
-        "aliases": ["neurosurgery", "neurosurgeon"],
+        "aliases": [
+            "neurosurgery", "neurosurgeon", "neuro surgery"
+        ],
         "keywords": [
-            "subdural", "epidural hematoma", "intracranial hemorrhage",
-            "brain tumor", "spinal cord compression", "disc prolapse",
-            "cauda equina", "neurosurgical", "skull fracture"
+            "subdural hematoma", "epidural hematoma",
+            "intracranial hemorrhage", "intracerebral hemorrhage",
+            "subarachnoid hemorrhage", "sah", "brain tumor",
+            "brain mass", "hydrocephalus", "spinal cord compression",
+            "cauda equina", "skull fracture", "neurosurgical"
         ]
     },
     "General Surgery": {
-        "aliases": ["general surgery", "surgery", "surgeon"],
+        "aliases": [
+            "general surgery", "general surgeon", "surgery"
+        ],
         "keywords": [
             "appendicitis", "cholecystitis", "bowel obstruction",
-            "intestinal obstruction", "perforation", "acute abdomen",
-            "hernia", "peritonitis", "abscess", "gallbladder"
+            "intestinal obstruction", "small bowel obstruction",
+            "large bowel obstruction", "perforation", "acute abdomen",
+            "peritonitis", "incarcerated hernia", "strangulated hernia",
+            "gallbladder", "surgical abdomen", "abdominal abscess"
         ]
     },
     "Orthopedics": {
-        "aliases": ["orthopedics", "orthopaedics", "orthopedic", "orthopaedic"],
+        "aliases": [
+            "orthopedics", "orthopaedics", "orthopedic",
+            "orthopaedic", "ortho"
+        ],
         "keywords": [
             "fracture", "dislocation", "femur", "tibia", "fibula",
-            "radius", "ulna", "humerus", "hip fracture", "joint injury",
-            "ligament", "orthopedic"
+            "radius", "ulna", "humerus", "hip fracture", "pelvic fracture",
+            "joint injury", "ligament tear", "tendon rupture",
+            "orthopedic", "orthopaedic", "bone injury"
         ]
     },
     "Gastroenterology": {
-        "aliases": ["gastroenterology", "gastro", "gi"],
+        "aliases": [
+            "gastroenterology", "gastroenterologist", "gastro", "gi"
+        ],
         "keywords": [
             "hematemesis", "melena", "gi bleed", "gastrointestinal bleed",
-            "pancreatitis", "cirrhosis", "hepatitis", "endoscopy",
-            "colitis", "crohn", "ulcerative colitis", "liver"
+            "upper gi bleed", "lower gi bleed", "pancreatitis",
+            "cirrhosis", "hepatitis", "endoscopy", "colitis",
+            "crohn", "ulcerative colitis", "liver disease",
+            "jaundice", "esophageal varices", "ascites"
         ]
     },
     "Nephrology": {
-        "aliases": ["nephrology", "renal", "kidney"],
+        "aliases": [
+            "nephrology", "nephrologist", "renal medicine", "kidney"
+        ],
         "keywords": [
             "acute kidney injury", "aki", "chronic kidney disease", "ckd",
-            "renal failure", "dialysis", "hemodialysis", "nephrotic",
-            "nephritic", "uremia", "renal impairment"
+            "end stage renal disease", "esrd", "renal failure",
+            "renal impairment", "dialysis", "hemodialysis",
+            "haemodialysis", "nephrotic", "nephritic", "uremia",
+            "high creatinine", "elevated creatinine", "hyperkalemia"
         ]
     },
     "Urology": {
-        "aliases": ["urology", "urologist"],
+        "aliases": [
+            "urology", "urologist", "uro"
+        ],
         "keywords": [
-            "urinary retention", "ureteric stone", "renal stone",
-            "kidney stone", "hydronephrosis", "hematuria", "prostate",
-            "testicular", "bladder", "ureter"
+            "urinary retention", "ureteric stone", "ureteral stone",
+            "renal stone", "kidney stone", "hydronephrosis", "hematuria",
+            "bph", "prostate", "testicular torsion", "testicular",
+            "bladder", "ureter", "urolithiasis"
         ]
     },
     "ENT": {
-        "aliases": ["ent", "otolaryngology", "ear nose throat"],
+        "aliases": [
+            "ent", "otolaryngology", "ear nose throat"
+        ],
         "keywords": [
             "epistaxis", "tonsillitis", "otitis", "mastoiditis",
-            "ear discharge", "sinusitis", "nasal", "larynx", "pharynx"
+            "ear discharge", "hearing loss", "sinusitis", "nasal",
+            "larynx", "laryngeal", "pharynx", "foreign body ear",
+            "foreign body nose"
         ]
     },
     "OB/GYN": {
-        "aliases": ["ob/gyn", "obgyn", "obstetrics", "gynecology", "gynaecology"],
+        "aliases": [
+            "ob/gyn", "obgyn", "obstetrics", "gynecology",
+            "gynaecology", "obstetrician", "gynecologist"
+        ],
         "keywords": [
             "pregnancy", "pregnant", "labor", "labour", "cesarean",
-            "caesarean", "preeclampsia", "eclampsia", "ectopic",
-            "vaginal bleeding", "ovarian", "uterus", "uterine"
+            "caesarean", "preeclampsia", "eclampsia", "ectopic pregnancy",
+            "vaginal bleeding", "postpartum", "placenta", "fetal",
+            "ovarian", "uterus", "uterine", "cervical pregnancy"
         ]
     },
     "Pediatrics": {
-        "aliases": ["pediatrics", "paediatrics", "pediatric", "paediatric"],
+        "aliases": [
+            "pediatrics", "paediatrics", "pediatric",
+            "paediatric", "pediatrician"
+        ],
         "keywords": [
             "pediatric", "paediatric", "child", "infant", "newborn",
-            "neonate", "neonatal", "baby"
+            "neonate", "neonatal", "baby", "years old child",
+            "months old", "birth weight"
         ]
     },
     "ICU/Critical Care": {
-        "aliases": ["icu", "critical care", "intensive care", "intensivist"],
+        "aliases": [
+            "icu", "critical care", "intensive care", "intensivist"
+        ],
         "keywords": [
-            "septic shock", "cardiogenic shock", "shock", "vasopressor",
+            "septic shock", "cardiogenic shock", "hypovolemic shock",
+            "shock", "vasopressor", "norepinephrine", "noradrenaline",
             "mechanical ventilation", "ventilated", "intubated",
-            "respiratory failure", "cardiac arrest", "multi organ",
-            "multiple organ failure", "critical care", "icu"
+            "intubation", "respiratory failure", "cardiac arrest",
+            "multi organ failure", "multiple organ failure",
+            "critical care", "icu admission", "unstable hemodynamics"
         ]
     },
     "Internal Medicine": {
-        "aliases": ["internal medicine", "medicine", "internist"],
+        "aliases": [
+            "internal medicine", "medicine", "internist",
+            "general medicine"
+        ],
         "keywords": [
-            "diabetes", "hypertension", "anemia", "electrolyte",
-            "fever", "infection", "dka", "hyperglycemia", "hypoglycemia",
-            "medical management"
+            "hyponatremia", "hypernatremia", "electrolyte imbalance",
+            "sepsis", "fever", "infection", "anemia", "anaemia",
+            "hypertension", "medical management", "general medical"
+        ]
+    },
+    "Endocrinology": {
+        "aliases": [
+            "endocrinology", "endocrine", "endocrinologist"
+        ],
+        "keywords": [
+            "diabetes mellitus", "diabetic ketoacidosis", "dka",
+            "hyperglycemia", "hypoglycemia", "thyroid", "thyrotoxicosis",
+            "hypothyroidism", "hyperthyroidism", "adrenal insufficiency",
+            "pituitary"
+        ]
+    },
+    "Hematology": {
+        "aliases": [
+            "hematology", "haematology", "hematologist", "haematologist"
+        ],
+        "keywords": [
+            "severe anemia", "severe anaemia", "thrombocytopenia",
+            "pancytopenia", "hemolysis", "haemolysis", "sickle cell",
+            "thalassemia", "coagulopathy", "bleeding disorder",
+            "neutropenia"
+        ]
+    },
+    "Oncology": {
+        "aliases": [
+            "oncology", "oncologist", "cancer"
+        ],
+        "keywords": [
+            "malignancy", "metastasis", "metastatic", "chemotherapy",
+            "radiotherapy", "cancer", "carcinoma", "lymphoma",
+            "leukemia", "leukaemia", "tumor", "tumour"
+        ]
+    },
+    "Infectious Disease": {
+        "aliases": [
+            "infectious disease", "infectious diseases",
+            "infectious disease specialist"
+        ],
+        "keywords": [
+            "bacteremia", "bacteraemia", "fungemia", "fungemia",
+            "meningitis", "endocarditis", "tuberculosis", "tb",
+            "hiv", "antimicrobial", "infectious disease consultation"
+        ]
+    },
+    "Rheumatology": {
+        "aliases": [
+            "rheumatology", "rheumatologist"
+        ],
+        "keywords": [
+            "rheumatoid arthritis", "systemic lupus", "sle",
+            "vasculitis", "ankylosing spondylitis", "autoimmune",
+            "connective tissue disease", "gout flare"
+        ]
+    },
+    "Dermatology": {
+        "aliases": [
+            "dermatology", "dermatologist", "skin"
+        ],
+        "keywords": [
+            "skin rash", "dermatitis", "eczema", "psoriasis",
+            "urticaria", "cellulitis", "skin lesion", "bullous",
+            "pemphigus"
+        ]
+    },
+    "Ophthalmology": {
+        "aliases": [
+            "ophthalmology", "ophthalmologist", "eye"
+        ],
+        "keywords": [
+            "vision loss", "visual loss", "retinal", "retina",
+            "glaucoma", "cataract", "eye pain", "corneal",
+            "ophthalmic", "ocular"
         ]
     }
 }
@@ -3353,167 +3484,191 @@ def merge_uploaded_pdfs(files):
     }
 
 
+def keyword_in_text(text, keyword):
+    keyword = normalize_text(keyword)
+    if not keyword:
+        return False
+
+    pattern = r"(?<![a-z0-9])" + re.escape(keyword) + r"(?![a-z0-9])"
+    return re.search(pattern, text) is not None
+
+
 def specialty_rule_score(text, rule):
     score = 0
     matches = []
+
     for keyword in rule["keywords"]:
-        if keyword in text:
-            weight = 2 if " " in keyword else 1
+        if keyword_in_text(text, keyword):
+            words = len(keyword.split())
+            if words >= 3:
+                weight = 4
+            elif words == 2:
+                weight = 3
+            elif len(keyword) <= 4:
+                weight = 2
+            else:
+                weight = 2
+
             score += weight
             matches.append(keyword)
+
     return score, matches
 
 
 def doctor_matches_specialty(doctor_specialty, canonical_specialty):
     normalized = normalize_text(doctor_specialty)
-    rule = SMART_REFERRAL_RULES[canonical_specialty]
+    rule = SMART_REFERRAL_RULES.get(canonical_specialty, {})
+    aliases = rule.get("aliases", [])
 
     if normalized == normalize_text(canonical_specialty):
         return True
 
     return any(
-        alias in normalized or normalized in alias
-        for alias in rule["aliases"]
+        normalize_text(alias) == normalized
+        or normalize_text(alias) in normalized
+        or normalized in normalize_text(alias)
+        for alias in aliases
     )
 
 
-def detect_specialty_and_doctor(report_text, doctors):
-    text = normalize_text(report_text)
-    if len(text) < 80:
-        return {
-            "ok": False,
-            "reason": (
-                "The PDF does not contain enough extractable text. "
-                "It may be a scanned-image PDF; use manual referral for this beta."
-            )
-        }
-
-    scored = []
-    for specialty, rule in SMART_REFERRAL_RULES.items():
-        score, matches = specialty_rule_score(text, rule)
-        if score > 0:
-            scored.append((score, specialty, matches))
-
-    scored.sort(key=lambda item: item[0], reverse=True)
-
-    if not scored:
-        return {
-            "ok": False,
-            "reason": "No supported specialty pattern was detected confidently."
-        }
-
-    best_score, best_specialty, matches = scored[0]
-    second_score = scored[1][0] if len(scored) > 1 else 0
-
-    # Beta safety gate: avoid auto-sending weak or ambiguous matches.
-    if best_score < 2 or (second_score > 0 and best_score == second_score):
-        top_names = ", ".join(item[1] for item in scored[:3])
-        return {
-            "ok": False,
-            "reason": (
-                "Routing is ambiguous in this beta"
-                + (f" between: {top_names}." if top_names else ".")
-                + " Please use manual referral."
-            )
-        }
-
-    candidates = [
-        d for d in doctors
-        if doctor_matches_specialty(d["specialty"], best_specialty)
-    ]
-
-    if not candidates:
-        return {
-            "ok": False,
-            "reason": (
-                f"Detected {best_specialty}, but no active doctor in that "
-                "specialty is configured."
-            )
-        }
-
-    candidates.sort(
+def select_least_busy_doctor(doctors):
+    ordered = sorted(
+        doctors,
         key=lambda d: (
             int(d["pending_count"] or 0),
             (d["display_name"] or d["username"]).lower()
         )
     )
-    selected = candidates[0]
+    return ordered[0] if ordered else None
+
+
+def detect_specialty_and_doctor(report_text, doctors):
+    text = normalize_text(report_text)
+
+    if len(text) < 80:
+        return {
+            "ok": False,
+            "reason": (
+                "The report does not contain enough readable clinical text "
+                "for automatic routing."
+            )
+        }
+
+    active_doctors = list(doctors)
+    if not active_doctors:
+        return {
+            "ok": False,
+            "reason": "No active doctors are configured."
+        }
+
+    scored = []
+
+    # Score only specialty families that actually have an active doctor
+    # in the current Doctors Directory.
+    for specialty, rule in SMART_REFERRAL_RULES.items():
+        candidates = [
+            d for d in active_doctors
+            if doctor_matches_specialty(d["specialty"], specialty)
+        ]
+        if not candidates:
+            continue
+
+        score, matches = specialty_rule_score(text, rule)
+        if score > 0:
+            scored.append({
+                "score": score,
+                "specialty": specialty,
+                "matches": matches,
+                "doctors": candidates
+            })
+
+    # Also recognize an exact specialty name written in the report,
+    # including custom specialties entered by Admin.
+    for d in active_doctors:
+        actual_specialty = normalize_text(d["specialty"])
+        if len(actual_specialty) >= 4 and keyword_in_text(text, actual_specialty):
+            existing = next(
+                (
+                    item for item in scored
+                    if any(
+                        normalize_text(cd["specialty"]) == actual_specialty
+                        for cd in item["doctors"]
+                    )
+                ),
+                None
+            )
+            if existing:
+                existing["score"] += 5
+                existing["matches"].append(d["specialty"])
+            else:
+                same_specialty = [
+                    x for x in active_doctors
+                    if normalize_text(x["specialty"]) == actual_specialty
+                ]
+                scored.append({
+                    "score": 5,
+                    "specialty": d["specialty"],
+                    "matches": [d["specialty"]],
+                    "doctors": same_specialty
+                })
+
+    scored.sort(
+        key=lambda item: (
+            item["score"],
+            len(item["matches"])
+        ),
+        reverse=True
+    )
+
+    if not scored:
+        return {
+            "ok": False,
+            "reason": (
+                "The report was read, but no matching specialty from the "
+                "active Doctors Directory was found."
+            )
+        }
+
+    best = scored[0]
+    second_score = scored[1]["score"] if len(scored) > 1 else 0
+
+    # Specific multi-word/abbreviation evidence is enough to route.
+    # Only stop when two specialties are genuinely tied at the top.
+    if second_score == best["score"] and best["score"] < 6:
+        top_names = ", ".join(
+            item["specialty"] for item in scored[:3]
+            if item["score"] == best["score"]
+        )
+        return {
+            "ok": False,
+            "reason": (
+                "Routing is still ambiguous between: "
+                + top_names
+                + ". Please use Manual Referral for this case."
+            )
+        }
+
+    selected = select_least_busy_doctor(best["doctors"])
+    if not selected:
+        return {
+            "ok": False,
+            "reason": (
+                f"Detected {best['specialty']}, but no active doctor "
+                "is available in that specialty."
+            )
+        }
 
     return {
         "ok": True,
         "specialty": selected["specialty"],
-        "canonical_specialty": best_specialty,
+        "canonical_specialty": best["specialty"],
         "doctor_username": selected["username"],
         "doctor_display": selected["display_name"],
         "pending_count": selected["pending_count"],
-        "matches": matches[:6],
-        "score": best_score
+        "matches": best["matches"][:8],
+        "score": best["score"]
     }
 
-
-def send_push_payload(username, payload):
-    ensure_vapid_keys()
-    conn = get_db()
-    subscriptions = conn.execute("""
-        SELECT endpoint, subscription_json
-        FROM push_subscriptions
-        WHERE username = ?
-    """, (username,)).fetchall()
-    conn.close()
-
-    dead_endpoints = []
-    sent = 0
-
-    for row in subscriptions:
-        try:
-            webpush(
-                subscription_info=json.loads(row["subscription_json"]),
-                data=json.dumps(payload),
-                vapid_private_key=str(VAPID_RUNTIME_PRIVATE_FILE),
-                vapid_claims={"sub": "mailto:act-doctor-call@example.com"},
-                timeout=10
-            )
-            sent += 1
-        except WebPushException as exc:
-            code = getattr(getattr(exc, "response", None), "status_code", None)
-            if code in (404, 410):
-                dead_endpoints.append(row["endpoint"])
-            else:
-                print("Doctor Call push error:", exc)
-        except Exception as exc:
-            print("Doctor Call push error:", exc)
-
-    if dead_endpoints:
-        conn = get_db()
-        for endpoint in dead_endpoints:
-            conn.execute(
-                "DELETE FROM push_subscriptions WHERE endpoint = ?",
-                (endpoint,)
-            )
-        conn.commit()
-        conn.close()
-
-    return {
-        "registered": len(subscriptions),
-        "sent": sent
-    }
-
-
-def send_case_push(case_id, case_no, specialty, doctor_username):
-    payload = {
-        "title": "🔔 ACT Doctor Call — Review Required",
-        "body": f"{specialty} case {case_no} is waiting for review.",
-        "url": f"/doctor-call/case/{case_id}",
-        "case_id": case_id,
-        "case_no": case_no,
-        "specialty": specialty
-    }
-    return send_push_payload(doctor_username, payload)
-
-
-# =========================
-# DOCTOR CALL ROUTES
-# =========================
 
 @app.route("/doctor-call")
 @login_required
