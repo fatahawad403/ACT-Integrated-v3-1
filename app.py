@@ -201,7 +201,7 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
     <div class="top-actions">
       <a class="btn light" href="/modules">Apps</a>
       <a class="btn light" href="/">BedFlow</a>
-      {% if role == 'admin' %}<a class="btn light" href="/doctor-call/admin/doctors">Doctors</a>{% endif %}
+      {% if role in ['insurance','admin'] %}<a class="btn light" href="/doctor-call/admin/doctors">Doctors</a>{% endif %}
       <a class="btn light" href="/logout">Logout</a>
     </div>
   </div>
@@ -730,7 +730,105 @@ setInterval(checkLatestCase,8000);
 
 DOCTOR_CALL_CASE_HTML = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Case {{ case[\'case_no\'] }}</title><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1100px;margin:auto;padding:20px 16px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.brand h1{margin:0;font-size:27px}.sub{color:#6b7280;margin-top:4px}.top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.btn{display:inline-block;border:0;border-radius:10px;padding:11px 15px;font-weight:bold;text-decoration:none;cursor:pointer}.primary{background:#1f6feb;color:white}.success{background:#14804a;color:white}.danger{background:#c93c37;color:white}.light{background:white;border:1px solid #e5e7eb;color:#172033}.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 6px 18px rgba(0,0,0,.035)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}label{display:block;color:#6b7280;font-size:13px;margin-bottom:6px}input,select{width:100%;padding:12px;border:1px solid #d5dae2;border-radius:10px;background:white;font-size:15px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #e5e7eb;font-size:14px}th{color:#6b7280;font-size:12px;text-transform:uppercase}.badge{display:inline-block;padding:6px 9px;border-radius:999px;background:#e8eef8;font-weight:bold;font-size:12px}.small{color:#6b7280;font-size:13px}.notice{background:#e9f8ef;border:1px solid #9bd6ad;color:#176b36;padding:11px;border-radius:10px;margin-bottom:14px}.actions{display:flex;gap:10px;flex-wrap:wrap}iframe{width:100%;height:72vh;border:1px solid #e5e7eb;border-radius:12px}.module-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}@media(max-width:700px){.grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}table{display:block;overflow-x:auto;white-space:nowrap}}</style></head><body><div class="wrap"><div class="topbar"><div class="brand"><h1>Case {{ case[\'case_no\'] }}</h1><div class="sub">{{ case[\'specialty\'] }} · {{ doctor_name }} · {{ case[\'status\'] }}</div></div><div class="top-actions">{% if role == \'doctor\' %}<a class="btn light" href="/doctor-call/doctor">Inbox</a>{% else %}<a class="btn light" href="/doctor-call">Cases</a>{% endif %}</div></div>{% if role == \'doctor\' and case[\'status\'] not in [\'Accepted\',\'Rejected\'] %}<div class="card"><div class="actions"><form method="post" action="/doctor-call/case/{{ case[\'id\'] }}/decision/Accepted"><button class="btn success">Accept ✅</button></form><form method="post" action="/doctor-call/case/{{ case[\'id\'] }}/decision/Rejected"><button class="btn danger">Reject ❌</button></form></div></div>{% endif %}<div class="card"><iframe src="/doctor-call/case/{{ case[\'id\'] }}/pdf"></iframe></div></div></body></html>'
 
-DOCTOR_CALL_ADMIN_HTML = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Doctor Accounts</title><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1150px;margin:auto;padding:20px 16px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.brand h1{margin:0;font-size:27px}.sub{color:#6b7280;margin-top:4px}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{display:inline-block;border:0;border-radius:10px;padding:10px 13px;font-weight:bold;text-decoration:none;cursor:pointer}.primary{background:#1f6feb;color:white}.light{background:white;border:1px solid #e5e7eb;color:#172033}.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}label{display:block;color:#6b7280;font-size:12px;margin-bottom:5px}input{width:100%;padding:11px;border:1px solid #d5dae2;border-radius:9px;font-size:14px}.notice{background:#e9f8ef;border:1px solid #9bd6ad;color:#176b36;padding:11px;border-radius:10px;margin-bottom:14px}.doctor{border-top:1px solid #eef1f5;padding:16px 0}.doctor:first-child{border-top:0}.doctor-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}.name{font-weight:800}.status{font-size:12px;padding:5px 8px;border-radius:999px;background:#eef3fa}.edit-grid{display:grid;grid-template-columns:1.2fr 1fr 1fr auto;gap:8px;align-items:end}.small{font-size:12px;color:#6b7280}@media(max-width:760px){.grid,.edit-grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}.edit-grid .btn{width:100%}}</style></head><body><div class="wrap"><div class="topbar"><div class="brand"><h1>Doctor Accounts</h1><div class="sub">Accounts, specialties and notification ownership.</div></div><div class="actions"><a class="btn light" href="/doctor-call">Doctor Call</a><a class="btn light" href="/modules">Apps</a></div></div>{% if message %}<div class="notice">{{ message }}</div>{% endif %}<div class="card"><h2 style="margin-top:0">Add Doctor</h2><form method="post" action="/doctor-call/admin/doctors/add"><div class="grid"><div><label>Username *</label><input name="username" required></div><div><label>Display Name *</label><input name="display_name" required></div><div><label>Specialty *</label><input name="specialty" placeholder="e.g. Cardiology" required></div><div><label>Temporary Password *</label><input type="password" name="password" minlength="6" required></div></div><div style="margin-top:14px"><button class="btn primary">Add Doctor</button></div></form></div><div class="card"><h2 style="margin-top:0">Doctors</h2><div class="small" style="margin-bottom:8px">Each doctor receives only the cases assigned to their username.</div>{% for d in doctors %}<div class="doctor"><div class="doctor-head"><div><div class="name">{{ d[\'display_name\'] }}</div><div class="small">@{{ d[\'username\'] }}</div></div><div class="status">{{ \'Active\' if d[\'active\']==1 else \'Disabled\' }}</div></div><form method="post" action="/doctor-call/admin/doctors/{{ d[\'username\'] }}/edit"><div class="edit-grid"><div><label>Display Name</label><input name="display_name" value="{{ d[\'display_name\'] }}" required></div><div><label>Specialty</label><input name="specialty" value="{{ d[\'specialty\'] }}" required></div><div><label>New Password (optional)</label><input type="password" name="new_password" minlength="6" placeholder="Leave blank to keep"></div><button class="btn primary">Save</button></div></form><form method="post" action="/doctor-call/admin/doctors/{{ d[\'username\'] }}/toggle" style="margin-top:8px"><button class="btn light">{{ \'Disable Doctor\' if d[\'active\']==1 else \'Activate Doctor\' }}</button></form></div>{% else %}<div>No doctors.</div>{% endfor %}</div></div></body></html>'
+DOCTOR_CALL_ADMIN_HTML = """
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Doctors Directory</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
+.wrap{max-width:1150px;margin:auto;padding:20px 16px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}
+.brand h1{margin:0;font-size:27px}.sub{color:#6b7280;margin-top:4px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{display:inline-block;border:0;border-radius:10px;padding:10px 13px;font-weight:bold;text-decoration:none;cursor:pointer}
+.primary{background:#1f6feb;color:white}.light{background:white;border:1px solid #e5e7eb;color:#172033}
+.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+label{display:block;color:#6b7280;font-size:12px;margin-bottom:5px}
+input{width:100%;padding:11px;border:1px solid #d5dae2;border-radius:9px;font-size:14px}
+.notice{background:#e9f8ef;border:1px solid #9bd6ad;color:#176b36;padding:11px;border-radius:10px;margin-bottom:14px}
+.info{background:#eef4ff;border:1px solid #c7d7ff;color:#294e9b;padding:11px;border-radius:10px;margin-bottom:14px}
+.doctor{border-top:1px solid #eef1f5;padding:16px 0}.doctor:first-child{border-top:0}
+.doctor-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
+.name{font-weight:800}.status{font-size:12px;padding:5px 8px;border-radius:999px;background:#eef3fa}
+.specialty{font-size:16px;font-weight:700;margin-top:6px}.edit-grid{display:grid;grid-template-columns:1.2fr 1fr 1fr auto;gap:8px;align-items:end}
+.small{font-size:12px;color:#6b7280}
+@media(max-width:760px){.grid,.edit-grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}.edit-grid .btn{width:100%}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1>Doctors Directory</h1>
+      <div class="sub">Doctors, specialties and availability for ACT Doctor Call.</div>
+    </div>
+    <div class="actions">
+      <a class="btn light" href="/doctor-call">Doctor Call</a>
+      <a class="btn light" href="/modules">Apps</a>
+    </div>
+  </div>
+
+  {% if message %}<div class="notice">{{ message }}</div>{% endif %}
+  {% if not can_manage %}
+    <div class="info">Insurance view: you can see doctors and specialties. Only Admin can add, edit, activate or disable doctor accounts.</div>
+  {% endif %}
+
+  {% if can_manage %}
+  <div class="card">
+    <h2 style="margin-top:0">Add Doctor</h2>
+    <form method="post" action="/doctor-call/admin/doctors/add">
+      <div class="grid">
+        <div><label>Username *</label><input name="username" required></div>
+        <div><label>Display Name *</label><input name="display_name" required></div>
+        <div><label>Specialty *</label><input name="specialty" placeholder="e.g. Cardiology" required></div>
+        <div><label>Temporary Password *</label><input type="password" name="password" minlength="6" required></div>
+      </div>
+      <div style="margin-top:14px"><button class="btn primary">Add Doctor</button></div>
+    </form>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <h2 style="margin-top:0">Doctors</h2>
+    <div class="small" style="margin-bottom:8px">Each doctor receives only cases assigned to their username.</div>
+
+    {% for d in doctors %}
+    <div class="doctor">
+      <div class="doctor-head">
+        <div>
+          <div class="name">{{ d['display_name'] }}</div>
+          <div class="small">@{{ d['username'] }}</div>
+          <div class="specialty">{{ d['specialty'] }}</div>
+        </div>
+        <div class="status">{{ 'Active' if d['active']==1 else 'Disabled' }}</div>
+      </div>
+
+      {% if can_manage %}
+      <form method="post" action="/doctor-call/admin/doctors/{{ d['username'] }}/edit">
+        <div class="edit-grid">
+          <div><label>Display Name</label><input name="display_name" value="{{ d['display_name'] }}" required></div>
+          <div><label>Specialty</label><input name="specialty" value="{{ d['specialty'] }}" required></div>
+          <div><label>New Password (optional)</label><input type="password" name="new_password" minlength="6" placeholder="Leave blank to keep"></div>
+          <button class="btn primary">Save</button>
+        </div>
+      </form>
+      <form method="post" action="/doctor-call/admin/doctors/{{ d['username'] }}/toggle" style="margin-top:8px">
+        <button class="btn light">{{ 'Disable Doctor' if d['active']==1 else 'Activate Doctor' }}</button>
+      </form>
+      {% endif %}
+    </div>
+    {% else %}
+      <div>No doctors.</div>
+    {% endfor %}
+  </div>
+</div>
+</body>
+</html>
+"""
 
 DEFAULT_USERS = {
     "insurance": {
@@ -4045,8 +4143,9 @@ def doctor_call_upload(filename):
 @app.route("/doctor-call/admin/doctors")
 @login_required
 def doctor_call_admin_doctors():
-    if session.get("role") != "admin":
-        return redirect(url_for("doctor_call_insurance"))
+    role = session.get("role")
+    if role not in ("insurance", "admin"):
+        return redirect(landing_url())
 
     conn = get_db()
     doctors = conn.execute("""
@@ -4061,7 +4160,8 @@ def doctor_call_admin_doctors():
     return render_template_string(
         DOCTOR_CALL_ADMIN_HTML,
         doctors=doctors,
-        message=request.args.get("message")
+        message=request.args.get("message"),
+        can_manage=(role == "admin")
     )
 
 
