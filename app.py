@@ -216,7 +216,7 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
   {% if message %}<div id="flashNotice" class="notice">{{ message }}</div>{% endif %}
 
   <div class="card smart-card">
-    <span class="beta">BETA v3.6.2 · GUIDED FALLBACK</span>
+    <span class="beta">BETA v3.7 · RESTORED DOCTORS</span>
     <h2 style="margin:10px 0 6px">🤖 Smart Referral</h2>
     <div class="help">
       Upload the report once. ACT reads it, routes it automatically when confident, or keeps the same file ready so Insurance can choose the specialty and doctor manually.
@@ -1053,13 +1053,44 @@ DEFAULT_USERS = {
         "password": "1234",
         "role": "admin",
         "display": "ACT BedFlow Admin"
-    },
-    "doctor": {
-        "password": "1234",
-        "role": "doctor",
-        "display": "Demo Doctor"
     }
 }
+
+DEFAULT_DOCTOR_PASSWORD = os.getenv(
+    "ACT_DEFAULT_DOCTOR_PASSWORD",
+    "ACT-Doctor-Temporary-Password"
+)
+
+# Restored from the hospital Doctors/Specialty list.
+# Usernames are stable IDs; Admin can change display names, specialty,
+# activation status, and passwords later without this seed overwriting them.
+DEFAULT_DOCTORS = [
+    ("talal.elhrby", "Dr. Talal Elhrby", "Orthopedics"),
+    ("sayed.waer", "Dr. Sayed Waer", "Internal Medicine"),
+    ("hashim.elkinani", "Dr. Hashim Elkinani", "Internal Medicine"),
+    ("elhussini.elshahwi", "Dr. El-Hussini Elshahwi", "Cardiology"),
+    ("ayman.morsy", "Dr. Ayman Morsy", "Cardiology"),
+    ("waqas.muhammad", "Dr. Waqas Muhammad", "Cardiology"),
+    ("mujeebulrhman", "Dr. Mujeebulrhman", "Pulmonology"),
+    ("najawa.eltayeb", "Dr. Najawa Eltayeb", "General Surgery"),
+    ("ibrahim.sulmai", "Dr. Ibrahim Sulmai", "General Surgery"),
+    ("rehab.hashim", "Dr. Rehab Hashim", "Pediatrics"),
+    ("marwa", "Dr. Marwa", "Neonatology"),
+    ("mohamed.elshekh", "Dr. Mohamed Elshekh", "Neurology"),
+    ("ekhlas.elnjeeb", "Dr. Ekhlas Elnjeeb", "OB/GYN"),
+    ("mon.sulieman", "Dr. Mon Sulieman", "OB/GYN"),
+    ("amjad.badawod", "Dr. Amjad Badawod", "Gastroenterology"),
+    ("belo", "Dr. Belo", "ENT"),
+    ("jaber", "Dr. Jaber", "ICU/Critical Care"),
+    ("waleed", "Dr. Waleed", "General Surgery"),
+    ("ahmed.helaly", "Dr. Ahmed Helaly", "Pediatrics"),
+    ("hazem.hamdan", "Dr. Hazem Hamdan", "General Surgery"),
+    ("mervt", "Dr. Mervt", "OB/GYN"),
+    ("tarig.eljamal", "Dr. Tarig El-Jamal", "ENT"),
+    ("tamador.osman", "Dr. Tamador Osman", "Internal Medicine"),
+    ("abdulmajed.abuali", "Dr. Abdulmajed Abu-Ali", "Urology"),
+    ("mohammed.elfaki", "Dr. Mohammed El-Faki", "ICU/Critical Care")
+]
 
 
 def init_db():
@@ -1189,6 +1220,42 @@ def init_db():
                 )
                 VALUES (?, ?, ?, ?, ?)
             """, user_values)
+
+    # Seed the full doctor directory without overwriting later Admin changes.
+    for username, display_name, specialty in DEFAULT_DOCTORS:
+        doctor_values = (
+            username,
+            generate_password_hash(DEFAULT_DOCTOR_PASSWORD),
+            "doctor",
+            display_name,
+            now_text()
+        )
+
+        if USE_POSTGRES:
+            conn.execute("""
+                INSERT INTO users
+                (
+                    username,
+                    password_hash,
+                    role,
+                    display_name,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (username) DO NOTHING
+            """, doctor_values)
+        else:
+            conn.execute("""
+                INSERT OR IGNORE INTO users
+                (
+                    username,
+                    password_hash,
+                    role,
+                    display_name,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?)
+            """, doctor_values)
 
     default_beds = [
         (
@@ -3289,17 +3356,32 @@ def init_doctor_call_db():
         )
     """)
 
-    if USE_POSTGRES:
-        conn.execute("""
-            INSERT INTO doctor_profiles (username, specialty, active)
-            VALUES (?, ?, 1)
-            ON CONFLICT (username) DO NOTHING
-        """, ("doctor", "Cardiology"))
-    else:
-        conn.execute("""
-            INSERT OR IGNORE INTO doctor_profiles (username, specialty, active)
-            VALUES (?, ?, 1)
-        """, ("doctor", "Cardiology"))
+    for username, display_name, specialty in DEFAULT_DOCTORS:
+        profile_values = (
+            username,
+            specialty
+        )
+
+        if USE_POSTGRES:
+            conn.execute("""
+                INSERT INTO doctor_profiles (username, specialty, active)
+                VALUES (?, ?, 1)
+                ON CONFLICT (username) DO NOTHING
+            """, profile_values)
+        else:
+            conn.execute("""
+                INSERT OR IGNORE INTO doctor_profiles
+                (username, specialty, active)
+                VALUES (?, ?, 1)
+            """, profile_values)
+
+    # Keep any historical Demo Doctor record for old case history,
+    # but remove it from active Smart Referral routing.
+    conn.execute("""
+        UPDATE doctor_profiles
+        SET active = 0
+        WHERE username = 'doctor'
+    """)
 
     conn.commit()
     conn.close()
@@ -3505,9 +3587,20 @@ SMART_REFERRAL_RULES = {
             "paediatric", "pediatrician"
         ],
         "keywords": [
-            "pediatric", "paediatric", "child", "infant", "newborn",
-            "neonate", "neonatal", "baby", "years old child",
-            "months old", "birth weight"
+            "pediatric", "paediatric", "child", "infant", "baby",
+            "years old child", "months old"
+        ]
+    },
+    "Neonatology": {
+        "aliases": [
+            "neonatology", "neonatologist", "nicu", "neonatal"
+        ],
+        "keywords": [
+            "neonate", "neonatal", "newborn", "prematurity", "preterm",
+            "nicu", "respiratory distress syndrome", "rds",
+            "neonatal jaundice", "meconium aspiration",
+            "birth asphyxia", "low birth weight", "very low birth weight",
+            "birth weight"
         ]
     },
     "ICU/Critical Care": {
