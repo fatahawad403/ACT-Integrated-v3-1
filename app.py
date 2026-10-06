@@ -216,7 +216,7 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
   {% if message %}<div id="flashNotice" class="notice">{{ message }}</div>{% endif %}
 
   <div class="card smart-card">
-    <span class="beta">BETA v3.7 · RESTORED DOCTORS</span>
+    <span class="beta">BETA v3.7.1 · DOCTOR LOGIN FIX</span>
     <h2 style="margin:10px 0 6px">🤖 Smart Referral</h2>
     <div class="help">
       Upload the report once. ACT reads it, routes it automatically when confident, or keeps the same file ready so Insurance can choose the specialty and doctor manually.
@@ -3355,6 +3355,38 @@ def init_doctor_call_db():
             setting_value TEXT NOT NULL
         )
     """)
+
+    # One-time password repair for the restored doctor accounts. This fixes
+    # accounts that were created before ACT_DEFAULT_DOCTOR_PASSWORD was set.
+    password_seed_key = "doctor_seed_password_v1_applied"
+    password_seed_row = conn.execute(
+        "SELECT setting_value FROM app_settings WHERE setting_key = ?",
+        (password_seed_key,)
+    ).fetchone()
+
+    if not password_seed_row:
+        doctor_password_hash = generate_password_hash(
+            DEFAULT_DOCTOR_PASSWORD
+        )
+        for username, display_name, specialty in DEFAULT_DOCTORS:
+            conn.execute("""
+                UPDATE users
+                SET password_hash = ?, updated_at = ?
+                WHERE username = ?
+                  AND role = 'doctor'
+            """, (
+                doctor_password_hash,
+                now_text(),
+                username
+            ))
+
+        conn.execute("""
+            INSERT INTO app_settings (setting_key, setting_value)
+            VALUES (?, ?)
+        """, (
+            password_seed_key,
+            now_text()
+        ))
 
     for username, display_name, specialty in DEFAULT_DOCTORS:
         profile_values = (
