@@ -3885,8 +3885,7 @@ TRIAGE_HISTORY_CUES = [
     "previous history of",
     "past history of",
     "known case of",
-    "remote history of",
-    "old "
+    "remote history of"
 ]
 
 # Diagnoses / clinical states that should dominate generic symptoms, labs,
@@ -4070,6 +4069,8 @@ TRIAGE_ANCHORS = {
     },
     "ICU/Critical Care": {
         "septic shock": 22,
+        "cardiogenic shock": 21,
+        "hypovolemic shock": 21,
         "cardiac arrest": 22,
         "mechanical ventilation": 20,
         "mechanically ventilated": 20,
@@ -4182,14 +4183,35 @@ def clinical_keyword_status(text, keyword):
     negated_found = False
 
     for match in pattern.finditer(text):
-        before = text[max(0, match.start() - 85):match.start()]
-        before_short = before[-55:]
+        before = text[max(0, match.start() - 90):match.start()]
+        after = text[match.end():min(len(text), match.end() + 40)]
 
-        if any(cue in before_short for cue in TRIAGE_NEGATION_CUES):
+        # Only treat a cue as applying to this diagnosis when it is close to
+        # the matched term. This avoids "history of hypertension ... stroke"
+        # incorrectly turning the current stroke into a historical diagnosis.
+        negation_pattern = (
+            r"(?:no evidence of|negative for|denies|denied|without|"
+            r"rule out|ruled out|unlikely|not suggestive of|"
+            r"not consistent with)\s+(?:[a-z0-9-]+\s+){0,4}$"
+        )
+        history_pattern = (
+            r"(?:history of|previous history of|past history of|"
+            r"known case of|remote history of)\s+"
+            r"(?:[a-z0-9-]+\s+){0,4}$"
+        )
+
+        if re.search(negation_pattern, before[-70:]):
             negated_found = True
             continue
 
-        if any(cue in before for cue in TRIAGE_HISTORY_CUES):
+        if re.match(
+            r"^\s*(?:ruled out|excluded|unlikely|not confirmed)",
+            after
+        ):
+            negated_found = True
+            continue
+
+        if re.search(history_pattern, before[-85:]):
             historical_found = True
             continue
 
@@ -4441,6 +4463,68 @@ def detect_specialty_and_doctor(report_text, doctors):
             "explicit_matches": explicit_matches
         })
 
+    # Patient-group context is used only as a conservative fallback.
+    # A clear organ-specific diagnosis can still outrank Pediatrics / OB-GYN.
+    pediatric_age = False
+    neonatal_age = False
+
+    for match in re.finditer(
+        r"\b(\d{1,2})\s*(day|days|month|months|year|years|yr|yrs)"
+        r"(?:\s*[- ]?\s*old)?\b",
+        text
+    ):
+        try:
+            age_value = int(match.group(1))
+        except (TypeError, ValueError):
+            continue
+
+        unit = match.group(2)
+        if unit in ("day", "days") and age_value <= 28:
+            neonatal_age = True
+        elif unit in ("month", "months") and age_value <= 216:
+            pediatric_age = True
+        elif unit in ("year", "years", "yr", "yrs") and age_value < 18:
+            pediatric_age = True
+
+    if neonatal_age:
+        scored.append({
+            "score": 16,
+            "specialty": "Neonatology",
+            "anchor_score": 16,
+            "anchor_matches": ["neonatal age"],
+            "current_anchors": ["neonatal age"],
+            "support_matches": [],
+            "explicit_score": 0,
+            "explicit_matches": []
+        })
+    elif pediatric_age:
+        scored.append({
+            "score": 12,
+            "specialty": "Pediatrics",
+            "anchor_score": 12,
+            "anchor_matches": ["pediatric age"],
+            "current_anchors": ["pediatric age"],
+            "support_matches": [],
+            "explicit_score": 0,
+            "explicit_matches": []
+        })
+
+    pregnancy_status = (
+        clinical_keyword_status(text, "pregnant") == "current"
+        or clinical_keyword_status(text, "pregnancy") == "current"
+    )
+    if pregnancy_status:
+        scored.append({
+            "score": 12,
+            "specialty": "OB/GYN",
+            "anchor_score": 12,
+            "anchor_matches": ["current pregnancy"],
+            "current_anchors": ["current pregnancy"],
+            "support_matches": [],
+            "explicit_score": 0,
+            "explicit_matches": []
+        })
+
     # Exact custom specialty wording entered by Admin is useful evidence,
     # but only when it appears in a priority clinical section.
     for d in active_doctors:
@@ -4472,6 +4556,33 @@ def detect_specialty_and_doctor(report_text, doctors):
                     "explicit_score": 10,
                     "explicit_matches": [d["specialty"]]
                 })
+
+    # Merge duplicate evidence rows (for example a pediatric age row plus
+    # ordinary Pediatrics keyword evidence) before ranking.
+    merged_by_specialty = {}
+    for item in scored:
+        key = normalize_text(item["specialty"])
+        existing = merged_by_specialty.get(key)
+
+        if not existing:
+            merged_by_specialty[key] = item
+            continue
+
+        existing["score"] += item["score"]
+        existing["anchor_score"] += item["anchor_score"]
+        existing["explicit_score"] += item["explicit_score"]
+
+        for field in (
+            "anchor_matches",
+            "current_anchors",
+            "support_matches",
+            "explicit_matches"
+        ):
+            existing[field] = list(dict.fromkeys(
+                existing[field] + item[field]
+            ))
+
+    scored = list(merged_by_specialty.values())
 
     # Internal Medicine is deliberately a fallback. It must not beat a
     # specific specialty when that specialty has a current diagnostic anchor.
@@ -4960,11 +5071,15 @@ def doctor_call_smart_referral():
     if manual_mode:
         matched_terms = "manual Insurance selection"
         route_label = "Manual Referral"
+        confidence_note = ""
     else:
         matched_terms = ", ".join(
             routing["matches"]
-        ) or "clinical pattern"
-        route_label = "Smart Referral"
+        ) or "clinical diagnosis"
+        route_label = "Clinical Smart Referral"
+        confidence_note = (
+            f" Triage confidence: {routing.get('confidence', 'Good')}."
+        )
 
     device_note = (
         f" Push delivered to {push_result['sent']} of "
@@ -4976,8 +5091,10 @@ def doctor_call_smart_referral():
     message = (
         f"🤖 {route_label}: {case_no} → {routing['specialty']} → "
         f"{routing['doctor_display']}. "
-        f"Matched: {matched_terms}. "
-        f"Merged {merged['file_count']} PDF(s), "
+        f"Clinical evidence: {matched_terms}."
+        + confidence_note
+        + " "
+        + f"Merged {merged['file_count']} PDF(s), "
         f"{merged['page_count']} page(s). "
         f"Browser OCR processed {client_ocr_pages} scanned page(s)."
         + device_note
