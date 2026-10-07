@@ -4190,9 +4190,11 @@ def clinical_keyword_status(text, keyword):
         # the matched term. This avoids "history of hypertension ... stroke"
         # incorrectly turning the current stroke into a historical diagnosis.
         negation_pattern = (
+            r"(?:(?:no|not)\s+"
+            r"(?:(?!but\b|however\b)[a-z0-9-]+\s+){0,3}|"
             r"(?:no evidence of|negative for|denies|denied|without|"
             r"rule out|ruled out|unlikely|not suggestive of|"
-            r"not consistent with)\s+(?:[a-z0-9-]+\s+){0,4}$"
+            r"not consistent with)\s+(?:[a-z0-9-]+\s+){0,4})$"
         )
         history_pattern = (
             r"(?:history of|previous history of|past history of|"
@@ -4321,22 +4323,29 @@ def explicit_specialty_score(text, priority_text, specialty, rule):
             continue
 
         escaped = re.escape(normalized_alias)
-        patterns = [
-            rf"(?:refer(?:red|ral)?|consult(?:ation)?|review|seen|under)\s+(?:by|to|with)?\s*.{{0,30}}{escaped}",
-            rf"{escaped}\s*.{{0,30}}(?:consult(?:ation)?|review|referral)"
+        strong_patterns = [
+            rf"(?:refer(?:red|ral)?|consult(?:ation)?(?: requested)?)"
+            rf"\s+(?:by|to|with|for)?\s*.{{0,30}}{escaped}",
+            rf"{escaped}\s*.{{0,30}}(?:consult(?:ation)? requested|referral)"
+        ]
+        review_patterns = [
+            rf"(?:for|request(?:ed)?)\s+.{{0,20}}{escaped}"
+            rf"\s+(?:review|opinion)",
+            rf"{escaped}\s+(?:review|opinion)\s+requested"
         ]
 
-        for pattern in patterns:
-            if re.search(pattern, text):
-                best = max(best, 18)
-                evidence.append(alias)
-                break
+        if any(re.search(pattern, text) for pattern in strong_patterns):
+            best = max(best, 18)
+            evidence.append(alias)
+        elif any(re.search(pattern, text) for pattern in review_patterns):
+            best = max(best, 14)
+            evidence.append(alias)
 
         if priority_text and keyword_in_text(priority_text, normalized_alias):
             best = max(best, 12)
             evidence.append(alias)
 
-    return best, evidence
+    return best, list(dict.fromkeys(evidence))
 
 
 def doctor_matches_specialty(doctor_specialty, canonical_specialty):
@@ -4515,9 +4524,9 @@ def detect_specialty_and_doctor(report_text, doctors):
     )
     if pregnancy_status:
         scored.append({
-            "score": 12,
+            "score": 8,
             "specialty": "OB/GYN",
-            "anchor_score": 12,
+            "anchor_score": 8,
             "anchor_matches": ["current pregnancy"],
             "current_anchors": ["current pregnancy"],
             "support_matches": [],
