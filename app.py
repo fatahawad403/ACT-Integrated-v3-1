@@ -216,7 +216,7 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
   {% if message %}<div id="flashNotice" class="notice">{{ message }}</div>{% endif %}
 
   <div class="card smart-card">
-    <span class="beta">BETA v3.8.1 · DOCTOR SELF-SERVICE</span>
+    <span class="beta">BETA v3.9 · CLINICAL TRIAGE</span>
     <h2 style="margin:10px 0 6px">🤖 Smart Referral</h2>
     <div class="help">
       Upload the report once. ACT reads it, routes it automatically when confident, or keeps the same file ready so Insurance can choose the specialty and doctor manually.
@@ -3840,13 +3840,325 @@ def merge_uploaded_pdfs(files):
 
 ROUTING_WEAK_TERMS = {
     "ecg", "ekg", "troponin", "spo2", "oxygen saturation",
-    "creatinine", "fever", "infection", "hypertension"
+    "creatinine", "fever", "infection", "hypertension",
+    "tachycardia", "bradycardia", "shortness of breath", "sob",
+    "dyspnea", "pain", "weakness", "dizziness", "vomiting"
 }
 
 ROUTING_STRONG_ABBREVIATIONS = {
     "acs", "stemi", "nstemi", "afib", "cva", "tia", "sah",
     "aki", "ckd", "esrd", "dka", "copd", "ild", "bph", "sle"
 }
+
+TRIAGE_PRIORITY_HEADINGS = [
+    "final diagnosis",
+    "principal diagnosis",
+    "primary diagnosis",
+    "discharge diagnosis",
+    "provisional diagnosis",
+    "working diagnosis",
+    "diagnosis",
+    "clinical impression",
+    "impression",
+    "assessment",
+    "reason for referral",
+    "reason for consultation",
+    "reason for admission",
+    "plan"
+]
+
+TRIAGE_NEGATION_CUES = [
+    "no evidence of",
+    "negative for",
+    "denies",
+    "denied",
+    "without",
+    "ruled out",
+    "rule out",
+    "unlikely",
+    "not suggestive of",
+    "not consistent with"
+]
+
+TRIAGE_HISTORY_CUES = [
+    "history of",
+    "previous history of",
+    "past history of",
+    "known case of",
+    "remote history of"
+]
+
+# Diagnoses / clinical states that should dominate generic symptoms, labs,
+# comorbidities and screening tests. These anchors are intentionally
+# conservative: automatic sending requires a real clinical anchor, not just
+# a vague symptom or an isolated investigation.
+TRIAGE_ANCHORS = {
+    "Cardiology": {
+        "stemi": 18,
+        "nstemi": 18,
+        "acute coronary syndrome": 17,
+        "myocardial infarction": 17,
+        "acute myocardial infarction": 18,
+        "unstable angina": 14,
+        "cardiogenic shock": 12,
+        "acute heart failure": 13,
+        "decompensated heart failure": 13,
+        "heart failure": 10,
+        "atrial fibrillation": 10,
+        "ventricular tachycardia": 14,
+        "complete heart block": 14,
+        "symptomatic bradycardia": 10
+    },
+    "Pulmonology": {
+        "copd exacerbation": 15,
+        "acute exacerbation of copd": 16,
+        "asthma exacerbation": 14,
+        "status asthmaticus": 17,
+        "pulmonary embolism": 15,
+        "massive pulmonary embolism": 17,
+        "hemoptysis": 11,
+        "pleural effusion": 10,
+        "interstitial lung disease": 13,
+        "bronchiectasis": 11,
+        "lung mass": 11,
+        "lung lesion": 9
+    },
+    "Neurology": {
+        "acute ischemic stroke": 20,
+        "ischemic stroke": 18,
+        "acute stroke": 18,
+        "stroke": 15,
+        "cva": 15,
+        "transient ischemic attack": 15,
+        "tia": 14,
+        "status epilepticus": 18,
+        "seizure": 12,
+        "epilepsy": 10,
+        "hemiparesis": 13,
+        "hemiplegia": 13,
+        "aphasia": 13,
+        "facial droop": 11,
+        "multiple sclerosis": 12,
+        "encephalopathy": 9
+    },
+    "Neurosurgery": {
+        "subdural hematoma": 20,
+        "epidural hematoma": 20,
+        "intracranial hemorrhage": 18,
+        "intracerebral hemorrhage": 18,
+        "subarachnoid hemorrhage": 20,
+        "sah": 16,
+        "brain tumor": 14,
+        "brain mass": 14,
+        "hydrocephalus": 14,
+        "spinal cord compression": 17,
+        "cauda equina": 18,
+        "skull fracture": 14
+    },
+    "General Surgery": {
+        "acute appendicitis": 18,
+        "appendicitis": 16,
+        "acute cholecystitis": 18,
+        "cholecystitis": 16,
+        "small bowel obstruction": 18,
+        "large bowel obstruction": 18,
+        "bowel obstruction": 17,
+        "intestinal obstruction": 17,
+        "perforated viscus": 20,
+        "bowel perforation": 20,
+        "peritonitis": 16,
+        "acute abdomen": 15,
+        "strangulated hernia": 18,
+        "incarcerated hernia": 16,
+        "abdominal abscess": 12
+    },
+    "Orthopedics": {
+        "hip fracture": 18,
+        "femur fracture": 18,
+        "pelvic fracture": 18,
+        "tibia fracture": 17,
+        "humerus fracture": 17,
+        "radius fracture": 16,
+        "ulna fracture": 16,
+        "fracture": 12,
+        "dislocation": 13,
+        "tendon rupture": 12,
+        "ligament tear": 10
+    },
+    "Gastroenterology": {
+        "upper gi bleed": 17,
+        "lower gi bleed": 16,
+        "gastrointestinal bleed": 16,
+        "hematemesis": 16,
+        "melena": 15,
+        "acute pancreatitis": 16,
+        "pancreatitis": 14,
+        "esophageal varices": 15,
+        "variceal bleeding": 17,
+        "decompensated cirrhosis": 14,
+        "ulcerative colitis": 12,
+        "crohn disease": 12
+    },
+    "Nephrology": {
+        "acute kidney injury": 17,
+        "aki": 14,
+        "chronic kidney disease": 14,
+        "ckd": 12,
+        "end stage renal disease": 17,
+        "esrd": 14,
+        "renal failure": 14,
+        "hemodialysis": 13,
+        "haemodialysis": 13,
+        "nephrotic syndrome": 15,
+        "nephritic syndrome": 15,
+        "uremia": 13
+    },
+    "Urology": {
+        "acute urinary retention": 16,
+        "urinary retention": 14,
+        "ureteric stone": 15,
+        "ureteral stone": 15,
+        "renal stone": 13,
+        "kidney stone": 13,
+        "hydronephrosis": 13,
+        "testicular torsion": 20,
+        "gross hematuria": 13,
+        "urolithiasis": 14,
+        "bph": 10
+    },
+    "ENT": {
+        "severe epistaxis": 16,
+        "epistaxis": 13,
+        "mastoiditis": 15,
+        "peritonsillar abscess": 16,
+        "tonsillitis": 10,
+        "otitis media": 10,
+        "otitis externa": 10,
+        "ear discharge": 9,
+        "hearing loss": 9,
+        "foreign body ear": 14,
+        "foreign body nose": 14
+    },
+    "OB/GYN": {
+        "ectopic pregnancy": 20,
+        "preeclampsia": 18,
+        "eclampsia": 20,
+        "placental abruption": 20,
+        "placenta previa": 18,
+        "postpartum hemorrhage": 20,
+        "obstructed labor": 18,
+        "preterm labor": 16,
+        "labor pain": 12,
+        "pregnancy with vaginal bleeding": 17,
+        "cesarean complication": 15,
+        "caesarean complication": 15
+    },
+    "Neonatology": {
+        "meconium aspiration": 20,
+        "neonatal respiratory distress": 19,
+        "respiratory distress syndrome": 18,
+        "prematurity": 16,
+        "preterm newborn": 18,
+        "neonatal jaundice": 14,
+        "birth asphyxia": 18,
+        "low birth weight": 14,
+        "very low birth weight": 16,
+        "nicu": 15,
+        "newborn": 10,
+        "neonate": 12
+    },
+    "ICU/Critical Care": {
+        "septic shock": 22,
+        "cardiogenic shock": 21,
+        "hypovolemic shock": 21,
+        "cardiac arrest": 22,
+        "mechanical ventilation": 20,
+        "mechanically ventilated": 20,
+        "intubated": 19,
+        "on ventilator": 19,
+        "vasopressor": 18,
+        "norepinephrine": 17,
+        "noradrenaline": 17,
+        "multi organ failure": 22,
+        "multiple organ failure": 22,
+        "unstable hemodynamics": 18,
+        "icu admission": 18,
+        "admitted to icu": 18,
+        "critical care": 15
+    },
+    "Internal Medicine": {
+        "sepsis": 10,
+        "severe hyponatremia": 12,
+        "hyponatremia": 9,
+        "severe hypernatremia": 12,
+        "hypernatremia": 9,
+        "electrolyte imbalance": 8,
+        "medical management": 7
+    },
+    "Endocrinology": {
+        "diabetic ketoacidosis": 18,
+        "dka": 16,
+        "thyroid storm": 18,
+        "myxedema coma": 18,
+        "adrenal crisis": 18,
+        "severe hypoglycemia": 12,
+        "thyrotoxicosis": 12
+    },
+    "Hematology": {
+        "sickle cell crisis": 17,
+        "pancytopenia": 14,
+        "severe thrombocytopenia": 14,
+        "hemolytic anemia": 14,
+        "haemolytic anaemia": 14,
+        "thalassemia": 12,
+        "coagulopathy": 11
+    },
+    "Oncology": {
+        "metastatic cancer": 16,
+        "metastatic carcinoma": 16,
+        "malignancy": 11,
+        "chemotherapy": 10,
+        "radiotherapy": 10,
+        "lymphoma": 13,
+        "leukemia": 13,
+        "leukaemia": 13
+    },
+    "Infectious Disease": {
+        "infective endocarditis": 16,
+        "bacteremia": 12,
+        "bacteraemia": 12,
+        "fungemia": 13,
+        "tuberculosis": 14,
+        "hiv": 10
+    },
+    "Rheumatology": {
+        "systemic lupus": 14,
+        "sle": 12,
+        "vasculitis": 14,
+        "rheumatoid arthritis": 12,
+        "ankylosing spondylitis": 12
+    },
+    "Dermatology": {
+        "stevens johnson syndrome": 18,
+        "toxic epidermal necrolysis": 20,
+        "pemphigus": 13,
+        "psoriasis": 10,
+        "eczema": 8
+    },
+    "Ophthalmology": {
+        "acute vision loss": 18,
+        "vision loss": 15,
+        "retinal detachment": 20,
+        "acute angle closure glaucoma": 20,
+        "glaucoma": 12,
+        "corneal ulcer": 16,
+        "eye trauma": 14
+    }
+}
+
+
+def normalize_text(value):
+    return " ".join((value or "").lower().replace("\n", " ").split())
 
 
 def keyword_in_text(text, keyword):
@@ -3858,38 +4170,182 @@ def keyword_in_text(text, keyword):
     return re.search(pattern, text) is not None
 
 
+def clinical_keyword_status(text, keyword):
+    """Return current, historical, negated, or missing for a clinical term."""
+    keyword = normalize_text(keyword)
+    if not keyword:
+        return "missing"
+
+    pattern = re.compile(
+        r"(?<![a-z0-9])" + re.escape(keyword) + r"(?![a-z0-9])"
+    )
+    historical_found = False
+    negated_found = False
+
+    for match in pattern.finditer(text):
+        before = text[max(0, match.start() - 90):match.start()]
+        after = text[match.end():min(len(text), match.end() + 40)]
+
+        # Only treat a cue as applying to this diagnosis when it is close to
+        # the matched term. This avoids "history of hypertension ... stroke"
+        # incorrectly turning the current stroke into a historical diagnosis.
+        negation_pattern = (
+            r"(?:(?:no|not)\s+"
+            r"(?:(?!but\b|however\b)[a-z0-9-]+\s+){0,3}|"
+            r"(?:no evidence of|negative for|denies|denied|without|"
+            r"rule out|ruled out|unlikely|not suggestive of|"
+            r"not consistent with)\s+(?:[a-z0-9-]+\s+){0,4})$"
+        )
+        history_pattern = (
+            r"(?:history of|previous history of|past history of|"
+            r"known case of|remote history of)\s+"
+            r"(?:[a-z0-9-]+\s+){0,4}$"
+        )
+
+        if re.search(negation_pattern, before[-70:]):
+            negated_found = True
+            continue
+
+        if re.match(
+            r"^\s*(?:ruled out|excluded|unlikely|not confirmed)",
+            after
+        ):
+            negated_found = True
+            continue
+
+        if re.search(history_pattern, before[-85:]):
+            historical_found = True
+            continue
+
+        return "current"
+
+    if historical_found:
+        return "historical"
+    if negated_found:
+        return "negated"
+    return "missing"
+
+
+def extract_priority_context(raw_text):
+    text = normalize_text(raw_text)
+    chunks = []
+
+    for heading in TRIAGE_PRIORITY_HEADINGS:
+        start = 0
+        while True:
+            index = text.find(heading, start)
+            if index < 0:
+                break
+
+            left = max(0, index - 120)
+            right = min(len(text), index + len(heading) + 700)
+            chunks.append(text[left:right])
+            start = index + len(heading)
+
+    return " ".join(chunks)
+
+
 def specialty_rule_score(text, rule):
+    """Low-weight supporting evidence only; never enough by itself to auto-send."""
     score = 0
     matches = []
     strong_matches = []
 
     for keyword in rule["keywords"]:
-        if not keyword_in_text(text, keyword):
+        status = clinical_keyword_status(text, keyword)
+        if status not in ("current", "historical"):
             continue
 
         normalized = normalize_text(keyword)
         words = len(normalized.split())
 
         if normalized in ROUTING_WEAK_TERMS:
-            weight = 1
+            weight = 0.5
         elif normalized in ROUTING_STRONG_ABBREVIATIONS:
-            weight = 4
-            strong_matches.append(keyword)
-        elif words >= 3:
-            weight = 4
-            strong_matches.append(keyword)
-        elif words == 2:
-            weight = 3
-            strong_matches.append(keyword)
-        else:
             weight = 2
-            if len(normalized) >= 7:
-                strong_matches.append(keyword)
+        elif words >= 3:
+            weight = 2
+        elif words == 2:
+            weight = 1.5
+        else:
+            weight = 1
+
+        if status == "historical":
+            weight *= 0.35
 
         score += weight
         matches.append(keyword)
 
+        if status == "current" and weight >= 2:
+            strong_matches.append(keyword)
+
     return score, matches, strong_matches
+
+
+def specialty_anchor_score(text, priority_text, specialty):
+    anchors = TRIAGE_ANCHORS.get(specialty, {})
+    score = 0
+    matches = []
+    current_matches = []
+
+    for keyword, base_weight in anchors.items():
+        status = clinical_keyword_status(text, keyword)
+        if status not in ("current", "historical"):
+            continue
+
+        weight = float(base_weight)
+
+        if status == "historical":
+            weight *= 0.30
+        else:
+            current_matches.append(keyword)
+
+        if priority_text and clinical_keyword_status(
+            priority_text,
+            keyword
+        ) == "current":
+            weight += 5
+
+        score += weight
+        matches.append(keyword)
+
+    return score, matches, current_matches
+
+
+def explicit_specialty_score(text, priority_text, specialty, rule):
+    aliases = [specialty] + list(rule.get("aliases", []))
+    best = 0
+    evidence = []
+
+    for alias in aliases:
+        normalized_alias = normalize_text(alias)
+        if len(normalized_alias) < 3:
+            continue
+
+        escaped = re.escape(normalized_alias)
+        strong_patterns = [
+            rf"(?:refer(?:red|ral)?|consult(?:ation)?(?: requested)?)"
+            rf"\s+(?:by|to|with|for)?\s*.{{0,30}}{escaped}",
+            rf"{escaped}\s*.{{0,30}}(?:consult(?:ation)? requested|referral)"
+        ]
+        review_patterns = [
+            rf"(?:for|request(?:ed)?)\s+.{{0,20}}{escaped}"
+            rf"\s+(?:review|opinion)",
+            rf"{escaped}\s+(?:review|opinion)\s+requested"
+        ]
+
+        if any(re.search(pattern, text) for pattern in strong_patterns):
+            best = max(best, 18)
+            evidence.append(alias)
+        elif any(re.search(pattern, text) for pattern in review_patterns):
+            best = max(best, 14)
+            evidence.append(alias)
+
+        if priority_text and keyword_in_text(priority_text, normalized_alias):
+            best = max(best, 12)
+            evidence.append(alias)
+
+    return best, list(dict.fromkeys(evidence))
 
 
 def doctor_matches_specialty(doctor_specialty, canonical_specialty):
@@ -3931,34 +4387,161 @@ def detect_specialty_and_doctor(report_text, doctors):
             "ok": False,
             "reason": (
                 "The report does not contain enough readable clinical text "
-                "for automatic routing."
+                "for safe automatic triage."
             )
         }
 
+    priority_text = extract_priority_context(report_text)
     active_doctors = list(doctors)
     scored = []
 
-    # First determine the specialty from the clinical report itself.
-    # Do NOT restrict scoring to specialties that currently have a doctor.
+    # Critical-care override is intentionally narrow. It only triggers on
+    # explicit current ICU-level states, not just hypoxia, infection or a
+    # single abnormal vital sign.
+    icu_score, icu_matches, icu_current = specialty_anchor_score(
+        text,
+        priority_text,
+        "ICU/Critical Care"
+    )
+
+    if icu_score >= 18 and icu_current:
+        candidates = [
+            d for d in active_doctors
+            if doctor_matches_specialty(
+                d["specialty"],
+                "ICU/Critical Care"
+            )
+        ]
+
+        if not candidates:
+            return {
+                "ok": False,
+                "reason": (
+                    "ACT detected a current ICU/Critical Care indication "
+                    f"({', '.join(icu_current[:4])}), but there is no active "
+                    "ICU/Critical Care doctor."
+                ),
+                "detected_specialty": "ICU/Critical Care",
+                "matches": icu_current[:8]
+            }
+
+        selected = select_least_busy_doctor(candidates)
+        return {
+            "ok": True,
+            "specialty": selected["specialty"],
+            "canonical_specialty": "ICU/Critical Care",
+            "doctor_username": selected["username"],
+            "doctor_display": selected["display_name"],
+            "pending_count": selected["pending_count"],
+            "matches": icu_current[:8],
+            "score": round(icu_score, 1),
+            "confidence": "High",
+            "triage_basis": "critical-care clinical anchor"
+        }
+
     for specialty, rule in SMART_REFERRAL_RULES.items():
-        score, matches, strong_matches = specialty_rule_score(text, rule)
+        anchor_score, anchor_matches, current_anchors = specialty_anchor_score(
+            text,
+            priority_text,
+            specialty
+        )
+        supporting_score, support_matches, _ = specialty_rule_score(
+            text,
+            rule
+        )
+        explicit_score, explicit_matches = explicit_specialty_score(
+            text,
+            priority_text,
+            specialty,
+            rule
+        )
 
-        if score > 0:
-            scored.append({
-                "score": score,
-                "specialty": specialty,
-                "matches": matches,
-                "strong_matches": strong_matches
-            })
+        total = anchor_score + supporting_score + explicit_score
 
-    # Exact specialty wording in the report is strong evidence, including
-    # custom specialty labels entered by Admin.
+        if total <= 0:
+            continue
+
+        scored.append({
+            "score": total,
+            "specialty": specialty,
+            "anchor_score": anchor_score,
+            "anchor_matches": anchor_matches,
+            "current_anchors": current_anchors,
+            "support_matches": support_matches,
+            "explicit_score": explicit_score,
+            "explicit_matches": explicit_matches
+        })
+
+    # Patient-group context is used only as a conservative fallback.
+    # A clear organ-specific diagnosis can still outrank Pediatrics / OB-GYN.
+    pediatric_age = False
+    neonatal_age = False
+
+    for match in re.finditer(
+        r"\b(\d{1,2})\s*(day|days|month|months|year|years|yr|yrs)"
+        r"(?:\s*[- ]?\s*old)?\b",
+        text
+    ):
+        try:
+            age_value = int(match.group(1))
+        except (TypeError, ValueError):
+            continue
+
+        unit = match.group(2)
+        if unit in ("day", "days") and age_value <= 28:
+            neonatal_age = True
+        elif unit in ("month", "months") and age_value <= 216:
+            pediatric_age = True
+        elif unit in ("year", "years", "yr", "yrs") and age_value < 18:
+            pediatric_age = True
+
+    if neonatal_age:
+        scored.append({
+            "score": 16,
+            "specialty": "Neonatology",
+            "anchor_score": 16,
+            "anchor_matches": ["neonatal age"],
+            "current_anchors": ["neonatal age"],
+            "support_matches": [],
+            "explicit_score": 0,
+            "explicit_matches": []
+        })
+    elif pediatric_age:
+        scored.append({
+            "score": 12,
+            "specialty": "Pediatrics",
+            "anchor_score": 12,
+            "anchor_matches": ["pediatric age"],
+            "current_anchors": ["pediatric age"],
+            "support_matches": [],
+            "explicit_score": 0,
+            "explicit_matches": []
+        })
+
+    pregnancy_status = (
+        clinical_keyword_status(text, "pregnant") == "current"
+        or clinical_keyword_status(text, "pregnancy") == "current"
+    )
+    if pregnancy_status:
+        scored.append({
+            "score": 8,
+            "specialty": "OB/GYN",
+            "anchor_score": 8,
+            "anchor_matches": ["current pregnancy"],
+            "current_anchors": ["current pregnancy"],
+            "support_matches": [],
+            "explicit_score": 0,
+            "explicit_matches": []
+        })
+
+    # Exact custom specialty wording entered by Admin is useful evidence,
+    # but only when it appears in a priority clinical section.
     for d in active_doctors:
         actual_specialty = normalize_text(d["specialty"])
         if len(actual_specialty) < 4:
             continue
 
-        if keyword_in_text(text, actual_specialty):
+        if priority_text and keyword_in_text(priority_text, actual_specialty):
             existing = next(
                 (
                     item for item in scored
@@ -3968,22 +4551,68 @@ def detect_specialty_and_doctor(report_text, doctors):
             )
 
             if existing:
-                existing["score"] += 6
-                existing["matches"].append(d["specialty"])
-                existing["strong_matches"].append(d["specialty"])
+                existing["score"] += 10
+                existing["explicit_score"] += 10
+                existing["explicit_matches"].append(d["specialty"])
             else:
                 scored.append({
-                    "score": 6,
+                    "score": 10,
                     "specialty": d["specialty"],
-                    "matches": [d["specialty"]],
-                    "strong_matches": [d["specialty"]]
+                    "anchor_score": 0,
+                    "anchor_matches": [],
+                    "current_anchors": [],
+                    "support_matches": [],
+                    "explicit_score": 10,
+                    "explicit_matches": [d["specialty"]]
                 })
+
+    # Merge duplicate evidence rows (for example a pediatric age row plus
+    # ordinary Pediatrics keyword evidence) before ranking.
+    merged_by_specialty = {}
+    for item in scored:
+        key = normalize_text(item["specialty"])
+        existing = merged_by_specialty.get(key)
+
+        if not existing:
+            merged_by_specialty[key] = item
+            continue
+
+        existing["score"] += item["score"]
+        existing["anchor_score"] += item["anchor_score"]
+        existing["explicit_score"] += item["explicit_score"]
+
+        for field in (
+            "anchor_matches",
+            "current_anchors",
+            "support_matches",
+            "explicit_matches"
+        ):
+            existing[field] = list(dict.fromkeys(
+                existing[field] + item[field]
+            ))
+
+    scored = list(merged_by_specialty.values())
+
+    # Internal Medicine is deliberately a fallback. It must not beat a
+    # specific specialty when that specialty has a current diagnostic anchor.
+    specific_anchor_exists = any(
+        item["specialty"] != "Internal Medicine"
+        and item["anchor_score"] >= 10
+        and item["current_anchors"]
+        for item in scored
+    )
+
+    if specific_anchor_exists:
+        for item in scored:
+            if item["specialty"] == "Internal Medicine":
+                item["score"] *= 0.45
 
     scored.sort(
         key=lambda item: (
             item["score"],
-            len(item["strong_matches"]),
-            len(item["matches"])
+            item["anchor_score"],
+            item["explicit_score"],
+            len(item["current_anchors"])
         ),
         reverse=True
     )
@@ -3992,43 +4621,89 @@ def detect_specialty_and_doctor(report_text, doctors):
         return {
             "ok": False,
             "reason": (
-                "ACT read the report but could not identify a specialty "
-                "confidently."
+                "ACT read the report but could not identify a safe "
+                "specialty from the clinical diagnosis."
             )
         }
 
     best = scored[0]
     second = scored[1] if len(scored) > 1 else None
-    second_score = second["score"] if second else 0
+    margin = (
+        best["score"] - second["score"]
+        if second
+        else best["score"]
+    )
 
-    # Weak screening/lab terms such as ECG or troponin must never route a
-    # case by themselves. Require either one strong clinical match or a
-    # clearly supported score.
-    if not best["strong_matches"] and best["score"] < 4:
+    # Pediatric / neonatal wording should not automatically override a clear
+    # organ-specific diagnosis. It is used as a fallback only if there is no
+    # stronger specialty anchor.
+    if best["specialty"] == "Pediatrics":
+        stronger_specific = next(
+            (
+                item for item in scored[1:]
+                if item["anchor_score"] >= 12
+                and item["current_anchors"]
+                and item["specialty"] not in (
+                    "Pediatrics",
+                    "Internal Medicine"
+                )
+            ),
+            None
+        )
+        if stronger_specific:
+            best = stronger_specific
+            second = scored[0]
+            margin = best["score"] - second["score"]
+
+    # Never auto-send from generic symptoms/labs alone. A safe auto-route
+    # needs a current diagnostic anchor or explicit referral evidence.
+    has_diagnostic_anchor = (
+        bool(best["current_anchors"])
+        and best["anchor_score"] >= 9
+    )
+    has_explicit_referral = best["explicit_score"] >= 12
+
+    if not has_diagnostic_anchor and not has_explicit_referral:
+        evidence = (
+            best["support_matches"][:4]
+            or best["anchor_matches"][:4]
+        )
         return {
             "ok": False,
             "reason": (
-                "ACT found only nonspecific tests or findings "
-                f"({', '.join(best['matches'][:4])}) and cannot choose "
-                "a specialty safely."
+                "ACT found only nonspecific findings"
+                + (
+                    f" ({', '.join(evidence)})"
+                    if evidence
+                    else ""
+                )
+                + " and will not auto-send to avoid a wrong specialty."
             )
         }
 
-    # If the two leading specialties are too close, ask Insurance instead
-    # of forcing a wrong referral.
-    if second and (
-        best["score"] == second_score
-        or (
-            best["score"] - second_score <= 1
-            and second_score >= 4
-        )
-    ):
+    # A close second specialty means the case is clinically ambiguous.
+    if second and second["score"] >= 9 and margin < 4:
         return {
             "ok": False,
             "reason": (
-                "Routing is ambiguous between "
-                f"{best['specialty']} and {second['specialty']}."
+                "Clinical triage is ambiguous between "
+                f"{best['specialty']} and {second['specialty']}. "
+                "Choose manually rather than risk a wrong referral."
             )
+        }
+
+    if best["score"] >= 18 and margin >= 6:
+        confidence = "High"
+    elif best["score"] >= 13 and margin >= 4:
+        confidence = "Good"
+    else:
+        return {
+            "ok": False,
+            "reason": (
+                f"ACT suspects {best['specialty']} but confidence is not "
+                "high enough for automatic sending. Choose manually."
+            ),
+            "detected_specialty": best["specialty"]
         }
 
     candidates = [
@@ -4036,16 +4711,22 @@ def detect_specialty_and_doctor(report_text, doctors):
         if doctor_matches_specialty(d["specialty"], best["specialty"])
     ]
 
+    evidence = (
+        best["current_anchors"]
+        + best["explicit_matches"]
+        + best["support_matches"]
+    )
+    evidence = list(dict.fromkeys(evidence))[:8]
+
     if not candidates:
         return {
             "ok": False,
             "reason": (
-                f"ACT detected {best['specialty']}, but there is no active "
-                "doctor in that specialty. Choose the specialty and doctor "
-                "manually."
+                f"ACT detected {best['specialty']} with {confidence.lower()} "
+                "confidence, but there is no active doctor in that specialty."
             ),
             "detected_specialty": best["specialty"],
-            "matches": best["matches"][:8]
+            "matches": evidence
         }
 
     selected = select_least_busy_doctor(candidates)
@@ -4057,8 +4738,10 @@ def detect_specialty_and_doctor(report_text, doctors):
         "doctor_username": selected["username"],
         "doctor_display": selected["display_name"],
         "pending_count": selected["pending_count"],
-        "matches": best["matches"][:8],
-        "score": best["score"]
+        "matches": evidence,
+        "score": round(best["score"], 1),
+        "confidence": confidence,
+        "triage_basis": "diagnosis / impression clinical anchors"
     }
 
 
@@ -4397,11 +5080,15 @@ def doctor_call_smart_referral():
     if manual_mode:
         matched_terms = "manual Insurance selection"
         route_label = "Manual Referral"
+        confidence_note = ""
     else:
         matched_terms = ", ".join(
             routing["matches"]
-        ) or "clinical pattern"
-        route_label = "Smart Referral"
+        ) or "clinical diagnosis"
+        route_label = "Clinical Smart Referral"
+        confidence_note = (
+            f" Triage confidence: {routing.get('confidence', 'Good')}."
+        )
 
     device_note = (
         f" Push delivered to {push_result['sent']} of "
@@ -4413,8 +5100,10 @@ def doctor_call_smart_referral():
     message = (
         f"🤖 {route_label}: {case_no} → {routing['specialty']} → "
         f"{routing['doctor_display']}. "
-        f"Matched: {matched_terms}. "
-        f"Merged {merged['file_count']} PDF(s), "
+        f"Clinical evidence: {matched_terms}."
+        + confidence_note
+        + " "
+        + f"Merged {merged['file_count']} PDF(s), "
         f"{merged['page_count']} page(s). "
         f"Browser OCR processed {client_ocr_pages} scanned page(s)."
         + device_note
