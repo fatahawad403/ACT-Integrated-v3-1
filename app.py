@@ -667,7 +667,7 @@ DOCTOR_CALL_DOCTOR_HTML = """
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/app-icon-192.png">
+<link rel="apple-touch-icon" href="/app-icon.svg">
 <meta name="theme-color" content="#0b5fd7">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -779,7 +779,7 @@ button,a,input{font:inherit}
 <div class="app-shell">
   <header class="app-header">
     <div class="brand-wrap">
-      <img class="app-icon" src="/app-icon-192.png" alt="ACT">
+      <img class="app-icon" src="/app-icon.svg" alt="ACT">
       <div class="brand">
         <h1>ACT Doctor Call</h1>
         <div class="doctor-meta">{{ display_name }} · {{ doctor_specialty }}</div>
@@ -1178,7 +1178,7 @@ DOCTOR_CALL_CASE_HTML = """
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 {% if role == 'doctor' %}
 <link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/app-icon-192.png">
+<link rel="apple-touch-icon" href="/app-icon.svg">
 {% endif %}
 <meta name="theme-color" content="#0b5fd7">
 <title>Case {{ case['case_no'] }}</title>
@@ -1203,7 +1203,7 @@ iframe{width:100%;height:72vh;border:1px solid #e2e8f0;border-radius:14px;backgr
 <div class="shell">
   <header class="header">
     <div class="brand">
-      <img src="/app-icon-192.png" alt="ACT">
+      <img src="/app-icon.svg" alt="ACT">
       <div>
         <h1>Case {{ case['case_no'] }}</h1>
         <div class="sub">{{ case['specialty'] }} · {{ doctor_name }}</div>
@@ -1253,7 +1253,7 @@ DOCTOR_CALL_INSTALL_HTML = """
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/app-icon-192.png">
+<link rel="apple-touch-icon" href="/app-icon.svg">
 <meta name="theme-color" content="#0b5fd7">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="ACT Doctor Call">
@@ -1273,15 +1273,24 @@ h1{font-size:31px;margin:17px 0 7px}.sub{color:#66758c;line-height:1.6;margin-bo
 </head>
 <body>
 <main class="card">
-  <img class="icon" src="/app-icon-192.png" alt="ACT Doctor Call">
+  <img class="icon" src="/app-icon.svg" alt="ACT Doctor Call">
   <h1>ACT Doctor Call</h1>
   <div class="sub">Install the doctor app on your phone for faster access, case alerts, PDF review, and Accept / Reject.</div>
   <button id="installNow" class="btn primary" type="button">📲 Install ACT Doctor Call</button>
   <a class="btn light" href="/login">Open Login Page</a>
 
+  <a id="openChrome" class="btn light" style="display:none" href="#">
+    🌐 Open this page in Chrome
+  </a>
+
+  <div id="browserWarning" class="guide" style="display:none;background:#fff7df;border-color:#efd37c;color:#6f5600">
+    This QR opened inside an in-app browser. Installation may not appear here.
+    Open this page in <b>Chrome on Android</b> or <b>Safari on iPhone</b>, then install.
+  </div>
+
   <div id="guide" class="guide">
-    <strong>Android:</strong> Open this page in Chrome, then tap <b>Install ACT Doctor Call</b>. If no prompt appears, Chrome menu (⋮) → Install app / Add to Home screen.<br>
-    <strong>iPhone:</strong> Open this page in Safari → Share → Add to Home Screen → Add.
+    <strong>Android:</strong> Chrome → tap <b>Install ACT Doctor Call</b>. If no prompt appears, Chrome menu (⋮) → Install app / Add to Home screen.<br>
+    <strong>iPhone:</strong> Safari → Share → Add to Home Screen → Add.
   </div>
   <div class="tiny">After installation, the ACT icon opens directly to the Doctor Inbox. Login is still required for security.</div>
 </main>
@@ -1289,6 +1298,41 @@ h1{font-size:31px;margin:17px 0 7px}.sub{color:#66758c;line-height:1.6;margin-bo
 let deferredInstallPrompt=null;
 const installNow=document.getElementById("installNow");
 const guide=document.getElementById("guide");
+const browserWarning=document.getElementById("browserWarning");
+const openChrome=document.getElementById("openChrome");
+
+function isIOS(){
+  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
+function isAndroid(){
+  return /android/i.test(navigator.userAgent);
+}
+
+function isLikelyInAppBrowser(){
+  const ua=navigator.userAgent.toLowerCase();
+  return /(fbav|fban|instagram|line\/|wv\)|; wv|whatsapp)/i.test(ua);
+}
+
+function configureBrowserHelp(){
+  if(isAndroid()){
+    const target=location.host + location.pathname;
+    openChrome.href=
+      "intent://" + target +
+      "#Intent;scheme=https;package=com.android.chrome;end";
+    openChrome.style.display="flex";
+  }
+
+  if(isLikelyInAppBrowser()){
+    browserWarning.style.display="block";
+  }
+
+  if(isIOS()){
+    openChrome.style.display="none";
+  }
+}
+
+configureBrowserHelp();
 
 function standalone(){
   return window.matchMedia("(display-mode: standalone)").matches
@@ -1313,7 +1357,12 @@ installNow.addEventListener("click",async()=>{
     try{await deferredInstallPrompt.userChoice;}catch(e){}
     deferredInstallPrompt=null;
   }else{
-    guide.scrollIntoView({behavior:"smooth",block:"center"});
+    if(isLikelyInAppBrowser()){
+      browserWarning.style.display="block";
+      browserWarning.scrollIntoView({behavior:"smooth",block:"center"});
+    }else{
+      guide.scrollIntoView({behavior:"smooth",block:"center"});
+    }
   }
 });
 if("serviceWorker" in navigator){
@@ -6107,8 +6156,7 @@ self.addEventListener("push", event => {
         renotify: true,
         requireInteraction: true,
         silent: false,
-        icon: "/app-icon-192.png",
-        badge: "/app-icon-192.png",
+        icon: "/app-icon.svg",
         vibrate: [900, 180, 900, 180, 900, 180, 1600],
         data: {url: data.url || "/doctor-call/doctor"}
       };
@@ -6172,16 +6220,16 @@ MANIFEST_JSON_V31 = json.dumps({
     ),
     "icons": [
         {
-            "src": "/app-icon-192.png",
-            "sizes": "192x192",
-            "type": "image/png",
+            "src": "/app-icon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
             "purpose": "any"
         },
         {
             "src": "/app-icon.svg",
             "sizes": "any",
             "type": "image/svg+xml",
-            "purpose": "any maskable"
+            "purpose": "maskable"
         }
     ],
     "shortcuts": [
@@ -6191,9 +6239,9 @@ MANIFEST_JSON_V31 = json.dumps({
             "url": "/doctor-call/doctor",
             "icons": [
                 {
-                    "src": "/app-icon-192.png",
-                    "sizes": "192x192",
-                    "type": "image/png"
+                    "src": "/app-icon.svg",
+                    "sizes": "any",
+                    "type": "image/svg+xml"
                 }
             ]
         }
@@ -6224,12 +6272,7 @@ def manifest_json():
 
 @app.route("/app-icon-192.png")
 def app_icon_192():
-    response = Response(
-        base64.b64decode(APP_ICON_192_B64),
-        mimetype="image/png"
-    )
-    response.headers["Cache-Control"] = "public, max-age=86400"
-    return response
+    return redirect(url_for("app_icon_svg"))
 
 
 @app.route("/app-icon.svg")
