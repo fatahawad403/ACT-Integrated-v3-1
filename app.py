@@ -353,7 +353,10 @@ a{color:inherit}
     </a>
   </section>
 
-  <div class="role-note">Signed in as {{ role|upper }}</div>
+  <div class="role-note">
+    Signed in as {{ role|upper }}<br>
+    <strong>Powered by Dr. Abdulfatah Sulieman · Insurance Department</strong>
+  </div>
 </div>
 </body>
 </html>
@@ -647,6 +650,9 @@ input:focus,select:focus{border-color:#7eaef1;box-shadow:0 0 0 4px rgba(18,103,2
     {% else %}
       <div class="empty">No referral cases yet.</div>
     {% endif %}
+  </div>
+  <div style="text-align:center;color:#8a95a8;font-size:12px;margin:20px 0 4px;font-weight:700">
+    Powered by Dr. Abdulfatah Sulieman · Insurance Department
   </div>
 <script>
 const fallbackBox=document.getElementById("manualFallback");
@@ -1215,7 +1221,10 @@ button,a,input{font:inherit}
     {% endif %}
   </section>
 
-  <div class="footer-note">ACT Doctor Call · Secure doctor-specific case review</div>
+  <div class="footer-note">
+    ACT Doctor Call · Secure doctor-specific case review<br>
+    <strong>Powered by Dr. Abdulfatah Sulieman · Insurance Department</strong>
+  </div>
 </div>
 
 <script>
@@ -1575,6 +1584,9 @@ iframe{width:100%;height:72vh;border:1px solid #e2e8f0;border-radius:14px;backgr
     </div>
     <iframe src="/doctor-call/case/{{ case['id'] }}/pdf"></iframe>
   </section>
+  <div style="text-align:center;color:#8a95a8;font-size:12px;margin:18px 0 2px;font-weight:700">
+    Powered by Dr. Abdulfatah Sulieman · Insurance Department
+  </div>
 </div>
 </body>
 </html>
@@ -1626,7 +1638,10 @@ h1{font-size:31px;margin:17px 0 7px}.sub{color:#66758c;line-height:1.6;margin-bo
     <strong>Android:</strong> Chrome → tap <b>Install ACT Doctor Call</b>. If no prompt appears, Chrome menu (⋮) → Install app / Add to Home screen.<br>
     <strong>iPhone:</strong> Safari → Share → Add to Home Screen → Add.
   </div>
-  <div class="tiny">After installation, the ACT icon opens directly to the Doctor Inbox. Login is still required for security.</div>
+  <div class="tiny">
+    After installation, the ACT icon opens directly to the Doctor Inbox. Login is still required for security.<br><br>
+    <strong>Powered by Dr. Abdulfatah Sulieman · Insurance Department</strong>
+  </div>
 </main>
 <script>
 let deferredInstallPrompt=null;
@@ -1811,6 +1826,9 @@ DOCTOR_CALL_ADMIN_HTML = """
       <div>No doctors.</div>
     {% endfor %}
     </div>
+  </div>
+  <div style="text-align:center;color:#8a95a8;font-size:12px;margin:20px 0 4px;font-weight:700">
+    Powered by Dr. Abdulfatah Sulieman · Insurance Department
   </div>
 </div>
 </body>
@@ -2313,7 +2331,8 @@ button {
         </form>
 
         <div class="footer">
-            ACT Integrated v3.1
+            ACT Integrated v3.1<br><br>
+            <strong>Powered by Dr. Abdulfatah Sulieman · Insurance Department</strong>
         </div>
 
     </div>
@@ -2493,6 +2512,10 @@ button {
         <a class="back" href="/modules">
             Back to Apps
         </a>
+
+        <div style="text-align:center;color:#9aa0aa;font-size:12px;margin-top:22px;font-weight:700">
+            Powered by Dr. Abdulfatah Sulieman · Insurance Department
+        </div>
 
     </div>
 
@@ -3272,7 +3295,8 @@ select {
 
 
     <div class="footer">
-        Auto refresh every 30 seconds
+        Auto refresh every 30 seconds<br><br>
+        <strong>Powered by Dr. Abdulfatah Sulieman · Insurance Department</strong>
     </div>
 
 </div>
@@ -4003,6 +4027,10 @@ th {
 
         {% endif %}
 
+    </div>
+
+    <div style="text-align:center;color:#9aa0aa;font-size:12px;margin-top:24px;font-weight:700">
+        Powered by Dr. Abdulfatah Sulieman · Insurance Department
     </div>
 
 </div>
