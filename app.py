@@ -668,6 +668,11 @@ DOCTOR_CALL_DOCTOR_HTML = """
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="refresh" content="60">
 <link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/app-icon-192.png">
+<meta name="theme-color" content="#0b5fd7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ACT Doctor Call">
 <title>ACT Doctor Call</title>
 <style>
 *{box-sizing:border-box}
@@ -694,12 +699,20 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}.badge{display:inline-b
       <div class="sub">{{ display_name }} · {{ doctor_specialty }}</div>
     </div>
     <div class="top-actions">
+      <button id="installApp" class="btn primary" type="button">Install App 📲</button>
       <a class="btn light" href="/change-password">Change Password</a>
       <a class="btn light" href="/logout">Logout</a>
     </div>
   </div>
 
-  <div id="installGuide" class="install-guide">\n    <strong>Install ACT Doctor Call on your phone</strong>\n    <div id="installGuideText" class="small" style="margin-top:5px">Android: use Chrome and tap Install App. iPhone: open in Safari → Share → Add to Home Screen.</div>\n  </div>\n\n  <div id="newCaseBanner" class="notice">
+  <div id="installGuide" class="install-guide">
+    <strong>Install ACT Doctor Call on your phone</strong>
+    <div id="installGuideText" class="small" style="margin-top:5px">
+      Android: use Chrome and tap Install App. iPhone: open in Safari → Share → Add to Home Screen.
+    </div>
+  </div>
+
+  <div id="newCaseBanner" class="notice">
     <div>
       <strong>🔔 New case received</strong>
       <div id="newCaseText" class="small" style="margin-top:4px"></div>
@@ -989,7 +1002,8 @@ if("serviceWorker" in navigator){
   });
 }
 
-window.addEventListener("load",async()=>{\n  refreshInstallUI();
+window.addEventListener("load",async()=>{
+  refreshInstallUI();
   try{
     if(!("serviceWorker" in navigator)||!("PushManager" in window)){
       setStatus("Push notifications are not supported on this browser.");
