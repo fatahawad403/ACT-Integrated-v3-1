@@ -2895,6 +2895,9 @@ select {
 # =========================
 
 def landing_url():
+    if session.get("role") == "doctor":
+        return url_for("doctor_call_doctor")
+
     return url_for("modules")
 
 
