@@ -367,36 +367,117 @@ DOCTOR_CALL_INSURANCE_HTML = """
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ACT Doctor Call</title>
 <style>
+:root{
+  --bg:#eef4fb;--surface:#fff;--text:#152238;--muted:#6b7890;
+  --blue:#1267e5;--blue2:#0b4fb3;--violet:#7057e8;--green:#178754;
+  --amber:#e69618;--red:#d94242;--line:#dfe7f2;
+  --shadow:0 14px 34px rgba(30,71,121,.09);
+}
 *{box-sizing:border-box}
-body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
-.wrap{max-width:1100px;margin:auto;padding:20px 16px}
-.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}
-.brand h1{margin:0;font-size:27px}.sub{color:#6b7280;margin-top:4px}
+html{background:var(--bg)}
+body{
+  margin:0;font-family:Inter,Arial,sans-serif;color:var(--text);min-height:100vh;
+  background:radial-gradient(circle at 88% 0,#dcecff 0,transparent 27%),
+  linear-gradient(180deg,#edf5ff 0,#f7f9fc 430px);
+}
+button,a,input,select{font:inherit}
+.wrap{max-width:1220px;margin:auto;padding:18px 18px 34px}
+.topbar{
+  display:flex;justify-content:space-between;align-items:center;gap:14px;
+  padding:14px 18px;background:linear-gradient(135deg,#0b63df,#0878ef);
+  color:#fff;border-radius:20px;box-shadow:0 14px 32px rgba(12,96,214,.22);
+  margin-bottom:16px;
+}
+.brand-wrap{display:flex;align-items:center;gap:12px;min-width:0}
+.brand-icon{width:52px;height:52px;border-radius:15px;background:#ffffff18;padding:5px;flex:0 0 auto}
+.brand h1{margin:0;font-size:25px}.sub{color:#e7f1ff;margin-top:4px;font-size:13px}
 .top-actions,.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.btn{display:inline-block;border:0;border-radius:10px;padding:11px 15px;font-weight:bold;text-decoration:none;cursor:pointer}
-.btn:disabled{opacity:.6;cursor:not-allowed}
-.primary{background:#1f6feb;color:white}.smart{background:#6d28d9;color:white}.light{background:white;border:1px solid #e5e7eb;color:#172033}
-.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 6px 18px rgba(0,0,0,.035)}
-.smart-card{border:1px solid #c4b5fd;background:linear-gradient(180deg,#faf7ff,#fff)}
-.beta{display:inline-block;padding:5px 8px;border-radius:999px;background:#ede9fe;color:#5b21b6;font-size:12px;font-weight:800}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;border:0;
+  border-radius:12px;padding:11px 15px;font-weight:800;text-decoration:none;
+  cursor:pointer;transition:.18s transform,.18s box-shadow;
+}
+.btn:hover{transform:translateY(-1px)}
+.btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+.primary{background:linear-gradient(135deg,var(--blue),#2785f5);color:white;box-shadow:0 8px 18px rgba(18,103,229,.18)}
+.smart{background:linear-gradient(135deg,#6d4ee8,#8b5cf6);color:white;box-shadow:0 8px 18px rgba(109,78,232,.18)}
+.light{background:#fff;color:var(--text);border:1px solid var(--line)}
+.topbar .light{background:#ffffff14;color:#fff;border-color:#ffffff35}
+.card{
+  background:var(--surface);border:1px solid var(--line);border-radius:22px;
+  padding:20px;margin-bottom:16px;box-shadow:var(--shadow)
+}
+.hero{
+  display:grid;grid-template-columns:1.35fr .65fr;gap:14px;margin-bottom:16px
+}
+.hero-main{
+  background:linear-gradient(135deg,#fff 0,#fbfdff 65%,#eaf3ff 100%);
+  border:1px solid var(--line);border-radius:22px;padding:22px;box-shadow:var(--shadow)
+}
+.hero-main h2{margin:0;font-size:27px}.hero-main p{margin:8px 0 0;color:var(--muted);line-height:1.5}
+.role-pill{
+  display:inline-flex;padding:6px 10px;border-radius:999px;background:#eaf2ff;
+  color:#1459b8;font-size:12px;font-weight:900;margin-bottom:10px
+}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.stat{
+  background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px;
+  box-shadow:0 8px 20px rgba(30,71,121,.05)
+}
+.stat strong{display:block;font-size:27px}.stat span{color:var(--muted);font-size:12px}
+.smart-card{border:1px solid #d8cffb;background:linear-gradient(180deg,#fbf9ff,#fff)}
+.smart-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px}
+.smart-title{display:flex;align-items:center;gap:11px}
+.smart-icon{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:#eee9ff;font-size:25px}
+.beta{display:inline-flex;padding:6px 10px;border-radius:999px;background:#ede9fe;color:#5b21b6;font-size:11px;font-weight:900}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-label{display:block;color:#6b7280;font-size:13px;margin-bottom:6px}
-input,select{width:100%;padding:12px;border:1px solid #d5dae2;border-radius:10px;background:white;font-size:15px}
-.help{color:#6b7280;font-size:13px;line-height:1.5;margin-top:8px}
-.progress{display:none;margin-top:12px;padding:12px;border-radius:10px;background:#f3e8ff;color:#5b21b6;font-size:13px;line-height:1.5}
+label{display:block;color:var(--muted);font-size:12px;font-weight:800;margin-bottom:6px}
+input,select{
+  width:100%;padding:12px 13px;border:1px solid #d5dfec;border-radius:12px;
+  background:#fff;font-size:15px;outline:none
+}
+input:focus,select:focus{border-color:#7eaef1;box-shadow:0 0 0 4px rgba(18,103,229,.08)}
+.file-wrap{padding:13px;border:1px dashed #bfd0e6;border-radius:15px;background:#f8fbff}
+.help{color:var(--muted);font-size:13px;line-height:1.55;margin-top:8px}
+.progress{display:none;margin-top:12px;padding:12px 14px;border-radius:12px;background:#f1ecff;color:#5b21b6;font-size:13px;line-height:1.5}
 .progress.show{display:block}
-.fallback{display:none;margin-top:14px;padding:14px;border:1px solid #f1c98d;border-radius:12px;background:#fff8eb}
+.fallback{display:none;margin-top:14px;padding:15px;border:1px solid #f0cf96;border-radius:15px;background:#fff9ec}
 .fallback.show{display:block}
-.fallback-title{font-weight:800;margin-bottom:6px}
+.fallback-title{font-weight:900;margin-bottom:6px}
 .fallback .help{margin-bottom:12px}
-.detected{display:none;margin:10px 0 12px;padding:10px 12px;border-radius:10px;background:#eef4ff;border:1px solid #c7d7ff;color:#244a9b;font-weight:800}
+.detected{display:none;margin:10px 0 12px;padding:10px 12px;border-radius:11px;background:#eef4ff;border:1px solid #c7d7ff;color:#244a9b;font-weight:900}
 .detected.show{display:block}
-table{width:100%;border-collapse:collapse}
-th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #e5e7eb;font-size:14px}
-th{color:#6b7280;font-size:12px;text-transform:uppercase}
-.badge{display:inline-block;padding:6px 9px;border-radius:999px;background:#e8eef8;font-weight:bold;font-size:12px}
-.notice{background:#e9f8ef;border:1px solid #9bd6ad;color:#176b36;padding:12px;border-radius:10px;margin-bottom:14px;line-height:1.5}
-@media(max-width:700px){.grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}table{display:block;overflow-x:auto;white-space:nowrap}.btn{width:100%;text-align:center}}
+.notice{background:#e9f8ef;border:1px solid #9bd6ad;color:#176b36;padding:13px 15px;border-radius:13px;margin-bottom:14px;line-height:1.5}
+.cases-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.cases-head h2{margin:0;font-size:21px}.cases-head .small{color:var(--muted);font-size:13px;margin-top:4px}
+.desktop-table{width:100%;border-collapse:collapse}
+.desktop-table th{text-align:left;padding:11px 9px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--line)}
+.desktop-table td{padding:12px 9px;border-bottom:1px solid #edf1f6;font-size:13px;vertical-align:middle}
+.case-no{font-weight:900}
+.badge{display:inline-flex;padding:6px 9px;border-radius:999px;background:#edf2f8;font-weight:900;font-size:11px}
+.badge.sent{background:#fff0e0;color:#9b5a00}.badge.opened{background:#eaf2ff;color:#1356a8}.badge.accepted{background:#e7f7ee;color:#176b3b}.badge.rejected{background:#fdecec;color:#a82929}
+.mobile-cases{display:none}
+.case-card{border:1px solid var(--line);border-radius:17px;padding:14px;background:#fff;box-shadow:0 7px 18px rgba(30,71,121,.05)}
+.case-card+.case-card{margin-top:10px}
+.case-card-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.case-card h3{margin:0;font-size:17px}.case-card .meta{margin:6px 0 11px;color:var(--muted);font-size:13px;line-height:1.55}
+.case-card .btn{width:100%}
+.empty{padding:30px;text-align:center;color:var(--muted);border:1px dashed #cfd9e7;border-radius:16px}
+@media(max-width:880px){.hero{grid-template-columns:1fr}.stats{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:720px){
+  .wrap{padding:10px 10px calc(24px + env(safe-area-inset-bottom))}
+  .topbar{border-radius:17px;padding:12px;align-items:flex-start;flex-direction:column}
+  .brand-icon{width:46px;height:46px}.brand h1{font-size:21px}
+  .top-actions{width:100%;display:grid;grid-template-columns:repeat(2,1fr)}
+  .top-actions .btn{width:100%;font-size:12px;padding:10px}
+  .hero-main{padding:18px;border-radius:18px}.hero-main h2{font-size:23px}
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .card{padding:15px;border-radius:18px}
+  .grid{grid-template-columns:1fr}
+  .actions{display:grid;grid-template-columns:1fr 1fr;width:100%}
+  .actions .btn{width:100%;padding:12px 8px}
+  .desktop-table{display:none}.mobile-cases{display:block}
+}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -404,23 +485,47 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
 <body>
 <div class="wrap">
   <div class="topbar">
-    <div class="brand">
-      <h1>ACT Doctor Call</h1>
-      <div class="sub">Insurance · Doctor Case Review</div>
+    <div class="brand-wrap">
+      <img class="brand-icon" src="/app-icon.svg" alt="ACT">
+      <div class="brand">
+        <h1>ACT Doctor Call</h1>
+        <div class="sub">{{ 'Admin' if role == 'admin' else 'Insurance' }} · Smart Clinical Referral</div>
+      </div>
     </div>
     <div class="top-actions">
-      <a class="btn light" href="/modules">Apps</a>
-      <a class="btn light" href="/">BedFlow</a>
-      {% if role in ['insurance','admin'] %}<a class="btn light" href="/doctor-call/admin/doctors">Doctors</a>{% endif %}
+      <a class="btn light" href="/modules">🏠 Operations</a>
+      <a class="btn light" href="/">🛏️ BedFlow</a>
+      <a class="btn light" href="/doctor-call/admin/doctors">👥 Doctors</a>
       <a class="btn light" href="/logout">Logout</a>
     </div>
   </div>
 
   {% if message %}<div id="flashNotice" class="notice">{{ message }}</div>{% endif %}
 
+  <section class="hero">
+    <div class="hero-main">
+      <span class="role-pill">{{ 'ADMIN CONTROL' if role == 'admin' else 'INSURANCE CONTROL' }}</span>
+      <h2>Clinical Referral Workspace</h2>
+      <p>Upload once, let ACT triage when confidence is high, or choose the specialty and doctor manually at any time.</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><strong>{{ pending_count }}</strong><span>Pending cases</span></div>
+      <div class="stat"><strong>{{ completed_count }}</strong><span>Completed</span></div>
+      <div class="stat"><strong>{{ active_doctors }}</strong><span>Active doctors</span></div>
+      <div class="stat"><strong>{{ specialty_count }}</strong><span>Specialties</span></div>
+    </div>
+  </section>
+
   <div class="card smart-card">
-    <span class="beta">BETA v3.9 · CLINICAL TRIAGE</span>
-    <h2 style="margin:10px 0 6px">🤖 Smart Referral</h2>
+    <div class="smart-head">
+      <div class="smart-title">
+        <div class="smart-icon">🤖</div>
+        <div>
+          <span class="beta">CLINICAL TRIAGE · SMART + MANUAL</span>
+          <h2 style="margin:7px 0 0">Smart Referral</h2>
+        </div>
+      </div>
+    </div>
     <div class="help">
       Upload the report once. ACT reads it, routes it automatically when confident, or keeps the same file ready so Insurance can choose the specialty and doctor manually.
     </div>
@@ -439,7 +544,7 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
           <label>Patient Ref. (optional)</label>
           <input name="patient_ref" placeholder="Patient / approval reference">
         </div>
-        <div style="grid-column:1/-1">
+        <div class="file-wrap" style="grid-column:1/-1">
           <label>Medical report + attachments (PDF) *</label>
           <input id="smartPdfs" type="file" name="pdfs" accept="application/pdf" multiple required>
           <div class="help">
@@ -494,29 +599,55 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
   </div>
 
   <div class="card">
-    <h2 style="margin-top:0">Cases</h2>
-    <table>
+    <div class="cases-head">
+      <div>
+        <h2>Referral Cases</h2>
+        <div class="small">Latest 200 cases · newest first</div>
+      </div>
+      <span class="badge">{{ cases|length }} total</span>
+    </div>
+
+    {% if cases %}
+    <table class="desktop-table">
       <thead><tr><th>Case</th><th>Specialty</th><th>Doctor</th><th>Status</th><th>Sent</th><th>Opened</th><th>Decision</th><th></th></tr></thead>
       <tbody>
       {% for c in cases %}
         <tr>
-          <td>{{ c['case_no'] }}</td>
+          <td class="case-no">{{ c['case_no'] }}</td>
           <td>{{ c['specialty'] }}</td>
           <td>{{ c['doctor_display'] or c['doctor_username'] }}</td>
-          <td><span class="badge">{{ c['status'] }}</span></td>
+          <td><span class="badge {{ (c['status'] or '')|lower }}">{{ c['status'] }}</span></td>
           <td>{{ c['sent_at'] }}</td>
           <td>{{ c['opened_at'] or '-' }}</td>
           <td>{{ c['decided_at'] or '-' }}</td>
-          <td><a class="btn light" href="/doctor-call/case/{{ c['id'] }}">View</a></td>
+          <td><a class="btn light" href="/doctor-call/case/{{ c['id'] }}">View →</a></td>
         </tr>
-      {% else %}
-        <tr><td colspan="8">No cases yet.</td></tr>
       {% endfor %}
       </tbody>
     </table>
-  </div>
-</div>
 
+    <div class="mobile-cases">
+      {% for c in cases %}
+      <article class="case-card">
+        <div class="case-card-top">
+          <div>
+            <h3>{{ c['case_no'] }}</h3>
+            <div class="meta">
+              {{ c['specialty'] }}<br>
+              {{ c['doctor_display'] or c['doctor_username'] }}<br>
+              Sent: {{ c['sent_at'] }}
+            </div>
+          </div>
+          <span class="badge {{ (c['status'] or '')|lower }}">{{ c['status'] }}</span>
+        </div>
+        <a class="btn primary" href="/doctor-call/case/{{ c['id'] }}">View Case →</a>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+      <div class="empty">No referral cases yet.</div>
+    {% endif %}
+  </div>
 <script>
 const fallbackBox=document.getElementById("manualFallback");
 const fallbackReason=document.getElementById("fallbackReason");
@@ -1583,38 +1714,36 @@ DOCTOR_CALL_ADMIN_HTML = """
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Doctors Directory</title>
 <style>
-*{box-sizing:border-box}
-body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
-.wrap{max-width:1150px;margin:auto;padding:20px 16px}
-.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}
-.brand h1{margin:0;font-size:27px}.sub{color:#6b7280;margin-top:4px}
-.actions{display:flex;gap:8px;flex-wrap:wrap}
-.btn{display:inline-block;border:0;border-radius:10px;padding:10px 13px;font-weight:bold;text-decoration:none;cursor:pointer}
-.primary{background:#1f6feb;color:white}.light{background:white;border:1px solid #e5e7eb;color:#172033}
-.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:16px}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-label{display:block;color:#6b7280;font-size:12px;margin-bottom:5px}
-input{width:100%;padding:11px;border:1px solid #d5dae2;border-radius:9px;font-size:14px}
-.notice{background:#e9f8ef;border:1px solid #9bd6ad;color:#176b36;padding:11px;border-radius:10px;margin-bottom:14px}
-.info{background:#eef4ff;border:1px solid #c7d7ff;color:#294e9b;padding:11px;border-radius:10px;margin-bottom:14px}
-.doctor{border-top:1px solid #eef1f5;padding:16px 0}.doctor:first-child{border-top:0}
-.doctor-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
-.name{font-weight:800}.status{font-size:12px;padding:5px 8px;border-radius:999px;background:#eef3fa}
-.specialty{font-size:16px;font-weight:700;margin-top:6px}.edit-grid{display:grid;grid-template-columns:1.2fr 1fr 1fr auto;gap:8px;align-items:end}
-.small{font-size:12px;color:#6b7280}
-@media(max-width:760px){.grid,.edit-grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}.edit-grid .btn{width:100%}}
+:root{--bg:#eef4fb;--surface:#fff;--text:#152238;--muted:#6b7890;--blue:#1267e5;--green:#178754;--red:#d94242;--line:#dfe7f2;--shadow:0 14px 34px rgba(30,71,121,.09)}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:radial-gradient(circle at 88% 0,#dcecff 0,transparent 27%),linear-gradient(180deg,#edf5ff,#f7f9fc 430px);color:var(--text);min-height:100vh}
+.wrap{max-width:1220px;margin:auto;padding:18px 18px 34px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:14px 18px;background:linear-gradient(135deg,#0b63df,#0878ef);color:#fff;border-radius:20px;box-shadow:0 14px 32px rgba(12,96,214,.22);margin-bottom:16px}
+.brand-wrap{display:flex;align-items:center;gap:12px}.brand-icon{width:52px;height:52px;border-radius:15px;background:#ffffff18;padding:5px}.brand h1{margin:0;font-size:25px}.sub{color:#e7f1ff;margin-top:4px;font-size:13px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:12px;padding:10px 13px;font-weight:800;text-decoration:none;cursor:pointer}.primary{background:linear-gradient(135deg,#1267e5,#2785f5);color:white}.light{background:white;border:1px solid var(--line);color:var(--text)}.topbar .light{background:#ffffff14;color:#fff;border-color:#ffffff35}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}.stat{background:#fff;border:1px solid var(--line);border-radius:18px;padding:17px;box-shadow:0 8px 20px rgba(30,71,121,.05)}.stat strong{display:block;font-size:28px}.stat span{color:var(--muted);font-size:12px}
+.card{background:white;border:1px solid var(--line);border-radius:20px;padding:19px;margin-bottom:16px;box-shadow:var(--shadow)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}label{display:block;color:var(--muted);font-size:12px;font-weight:800;margin-bottom:5px}input{width:100%;padding:11px 12px;border:1px solid #d5dfec;border-radius:11px;font-size:14px}input:focus{outline:none;border-color:#7eaef1;box-shadow:0 0 0 4px rgba(18,103,229,.08)}
+.notice{background:#e9f8ef;border:1px solid #9bd6ad;color:#176b36;padding:12px 14px;border-radius:12px;margin-bottom:14px}.info{background:#eef4ff;border:1px solid #c7d7ff;color:#294e9b;padding:12px 14px;border-radius:12px;margin-bottom:14px}
+.directory-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}.directory-head h2{margin:0}.small{font-size:12px;color:var(--muted)}
+.doctor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.doctor{border:1px solid var(--line);border-radius:17px;padding:15px;background:#fff}.doctor-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}.name{font-weight:900;font-size:17px}.status{font-size:11px;padding:6px 9px;border-radius:999px;background:#e7f7ee;color:#176b3b;font-weight:900}.status.off{background:#fdecec;color:#a82929}.specialty{font-size:15px;font-weight:900;margin-top:6px;color:#1d4f91}
+.edit-grid{display:grid;grid-template-columns:1.2fr 1fr 1fr auto;gap:8px;align-items:end}.toggle-form{margin-top:8px}.toggle-form .btn{width:100%}
+@media(max-width:900px){.doctor-grid{grid-template-columns:1fr}.edit-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:700px){.wrap{padding:10px}.topbar{align-items:flex-start;flex-direction:column;border-radius:17px}.actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.actions .btn{width:100%;font-size:12px}.stats{grid-template-columns:repeat(3,1fr);gap:8px}.stat{padding:12px}.stat strong{font-size:22px}.grid,.edit-grid{grid-template-columns:1fr}.card{padding:15px;border-radius:18px}}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="topbar">
-    <div class="brand">
-      <h1>Doctors Directory</h1>
-      <div class="sub">Doctors, specialties and availability for ACT Doctor Call.</div>
+    <div class="brand-wrap">
+      <img class="brand-icon" src="/app-icon.svg" alt="ACT">
+      <div class="brand">
+        <h1>Doctors Directory</h1>
+        <div class="sub">ACT Doctor Call · specialties, availability and account management</div>
+      </div>
     </div>
     <div class="actions">
-      <a class="btn light" href="/doctor-call">Doctor Call</a>
-      <a class="btn light" href="/modules">Apps</a>
+      <a class="btn light" href="/doctor-call">🔔 Doctor Call</a>
+      <a class="btn light" href="/modules">🏠 Operations</a>
     </div>
   </div>
 
@@ -1622,6 +1751,12 @@ input{width:100%;padding:11px;border:1px solid #d5dae2;border-radius:9px;font-si
   {% if not can_manage %}
     <div class="info">Insurance view: you can see doctors and specialties. Only Admin can add, edit, activate or disable doctor accounts.</div>
   {% endif %}
+
+  <section class="stats">
+    <div class="stat"><strong>{{ doctor_count }}</strong><span>Total doctors</span></div>
+    <div class="stat"><strong>{{ active_count }}</strong><span>Active</span></div>
+    <div class="stat"><strong>{{ specialty_count }}</strong><span>Specialties</span></div>
+  </section>
 
   {% if can_manage %}
   <div class="card">
@@ -1639,8 +1774,13 @@ input{width:100%;padding:11px;border:1px solid #d5dae2;border-radius:9px;font-si
   {% endif %}
 
   <div class="card">
-    <h2 style="margin-top:0">Doctors</h2>
-    <div class="small" style="margin-bottom:8px">Each doctor receives only cases assigned to their username.</div>
+    <div class="directory-head">
+      <div>
+        <h2>Doctors</h2>
+        <div class="small">Each doctor receives only cases assigned to their own username.</div>
+      </div>
+    </div>
+    <div class="doctor-grid">
 
     {% for d in doctors %}
     <div class="doctor">
@@ -1650,7 +1790,7 @@ input{width:100%;padding:11px;border:1px solid #d5dae2;border-radius:9px;font-si
           <div class="small">@{{ d['username'] }}</div>
           <div class="specialty">{{ d['specialty'] }}</div>
         </div>
-        <div class="status">{{ 'Active' if d['active']==1 else 'Disabled' }}</div>
+        <div class="status {{ 'off' if d['active']!=1 else '' }}">{{ 'Active' if d['active']==1 else 'Disabled' }}</div>
       </div>
 
       {% if can_manage %}
@@ -1662,7 +1802,7 @@ input{width:100%;padding:11px;border:1px solid #d5dae2;border-radius:9px;font-si
           <button class="btn primary">Save</button>
         </div>
       </form>
-      <form method="post" action="/doctor-call/admin/doctors/{{ d['username'] }}/toggle" style="margin-top:8px">
+      <form class="toggle-form" method="post" action="/doctor-call/admin/doctors/{{ d['username'] }}/toggle">
         <button class="btn light">{{ 'Disable Doctor' if d['active']==1 else 'Activate Doctor' }}</button>
       </form>
       {% endif %}
@@ -1670,6 +1810,7 @@ input{width:100%;padding:11px;border:1px solid #d5dae2;border-radius:9px;font-si
     {% else %}
       <div>No doctors.</div>
     {% endfor %}
+    </div>
   </div>
 </div>
 </body>
@@ -5458,13 +5599,26 @@ def doctor_call_insurance():
     conn.close()
 
     specialties = sorted({d["specialty"] for d in doctors})
+    pending_count = sum(
+        1 for item in rows
+        if item["status"] in ("Sent", "Opened")
+    )
+    completed_count = sum(
+        1 for item in rows
+        if item["status"] in ("Accepted", "Rejected")
+    )
+
     return render_template_string(
         DOCTOR_CALL_INSURANCE_HTML,
         doctors=doctors,
         specialties=specialties,
         cases=rows,
         message=request.args.get("message"),
-        role=session.get("role")
+        role=session.get("role"),
+        pending_count=pending_count,
+        completed_count=completed_count,
+        active_doctors=len(doctors),
+        specialty_count=len(specialties)
     )
 
 
@@ -6189,11 +6343,23 @@ def doctor_call_admin_doctors():
     """).fetchall()
     conn.close()
 
+    doctor_count = len(doctors)
+    active_count = sum(
+        1 for item in doctors
+        if item["active"] == 1
+    )
+    specialty_count = len({
+        item["specialty"] for item in doctors
+    })
+
     return render_template_string(
         DOCTOR_CALL_ADMIN_HTML,
         doctors=doctors,
         message=request.args.get("message"),
-        can_manage=(role == "admin")
+        can_manage=(role == "admin"),
+        doctor_count=doctor_count,
+        active_count=active_count,
+        specialty_count=specialty_count
     )
 
 
