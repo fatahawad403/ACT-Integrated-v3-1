@@ -665,8 +665,7 @@ DOCTOR_CALL_DOCTOR_HTML = """
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="refresh" content="60">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/app-icon-192.png">
 <meta name="theme-color" content="#0b5fd7">
@@ -675,40 +674,128 @@ DOCTOR_CALL_DOCTOR_HTML = """
 <meta name="apple-mobile-web-app-title" content="ACT Doctor Call">
 <title>ACT Doctor Call</title>
 <style>
+:root{
+  --bg:#eef4fb;--surface:#fff;--text:#152238;--muted:#6b7890;
+  --blue:#1267e5;--blue2:#0b4fb3;--green:#178754;--red:#d94242;
+  --line:#dfe7f2;--shadow:0 14px 34px rgba(30,71,121,.09);
+}
 *{box-sizing:border-box}
-body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
-.wrap{max-width:1100px;margin:auto;padding:20px 16px}
-.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}
-.brand h1{margin:0;font-size:27px}.sub{color:#6b7280;margin-top:4px}
-.top-actions,.notification-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.btn{display:inline-block;border:0;border-radius:10px;padding:11px 15px;font-weight:bold;text-decoration:none;cursor:pointer}
-.primary{background:#1f6feb;color:white}.success{background:#14804a;color:white}.light{background:white;border:1px solid #e5e7eb;color:#172033}
-.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 6px 18px rgba(0,0,0,.035)}
-table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #e5e7eb;font-size:14px}
-th{color:#6b7280;font-size:12px;text-transform:uppercase}.badge{display:inline-block;padding:6px 9px;border-radius:999px;background:#e8eef8;font-weight:bold;font-size:12px}
-.small{color:#6b7280;font-size:13px}.notice{display:none;background:#fff3cd;border:1px solid #f1c453;color:#6d5200;padding:14px;border-radius:12px;margin-bottom:16px}
-.notice.show{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.install-guide{display:none;background:#eef5ff;border:1px solid #b8d2ff;border-radius:14px;padding:14px;margin-bottom:16px;line-height:1.55}.install-guide.show{display:block}.install-guide strong{color:#0b4fb3}.install-steps{margin:8px 0 0;padding-left:20px;color:#4b5563}
-@media(max-width:700px){.topbar{align-items:flex-start;flex-direction:column}table{display:block;overflow-x:auto;white-space:nowrap}.notification-actions{width:100%}.notification-actions .btn{flex:1}}
+html{background:var(--bg)}
+body{margin:0;font-family:Inter,Arial,sans-serif;background:linear-gradient(180deg,#eaf2fb 0,#f7f9fc 420px);color:var(--text);min-height:100vh}
+button,a,input{font:inherit}
+.app-shell{max-width:1180px;margin:auto;padding:18px 18px 34px}
+.app-header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border:1px solid rgba(255,255,255,.8);background:rgba(255,255,255,.88);backdrop-filter:blur(12px);border-radius:22px;box-shadow:var(--shadow);position:sticky;top:10px;z-index:10}
+.brand-wrap{display:flex;align-items:center;gap:13px;min-width:0}
+.app-icon{width:56px;height:56px;border-radius:16px;box-shadow:0 8px 18px rgba(11,95,215,.22);flex:0 0 auto}
+.brand h1{margin:0;font-size:24px;line-height:1.1}
+.doctor-meta{margin-top:5px;color:var(--muted);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.btn{border:0;border-radius:12px;padding:11px 14px;font-weight:800;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;transition:.18s transform,.18s box-shadow}
+.btn:hover{transform:translateY(-1px)}
+.btn.primary{background:linear-gradient(135deg,var(--blue),#2785f5);color:white;box-shadow:0 8px 18px rgba(18,103,229,.2)}
+.btn.success{background:var(--green);color:white}
+.btn.light{background:#fff;border:1px solid var(--line);color:var(--text)}
+.btn.danger{background:var(--red);color:white}
+.hero{margin:18px 0;display:grid;grid-template-columns:1.35fr .65fr;gap:14px}
+.welcome-card,.notify-card,.panel,.stat{background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow)}
+.welcome-card{padding:22px;background:linear-gradient(135deg,#0b5fd7 0,#1b78ea 60%,#5ab6ff 120%);color:white;position:relative;overflow:hidden}
+.welcome-card:after{content:"";position:absolute;width:210px;height:210px;border-radius:50%;background:rgba(255,255,255,.11);right:-70px;top:-90px}
+.welcome-card h2{margin:0;font-size:25px;position:relative;z-index:1}
+.welcome-card p{margin:8px 0 0;opacity:.9;line-height:1.5;position:relative;z-index:1}
+.notify-card{padding:18px;display:flex;flex-direction:column;justify-content:center}
+.notify-title{display:flex;align-items:center;gap:9px;font-size:17px;font-weight:900}
+.status-dot{width:11px;height:11px;border-radius:50%;background:#f0a000;box-shadow:0 0 0 5px rgba(240,160,0,.12)}
+.status-text{color:var(--muted);font-size:13px;margin:7px 0 12px;line-height:1.45}
+.notification-actions{display:flex;gap:8px;flex-wrap:wrap}
+.notification-actions .btn{flex:1;min-width:145px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}
+.stat{padding:17px 18px;display:flex;align-items:center;gap:13px}
+.stat-icon{width:43px;height:43px;border-radius:13px;display:grid;place-items:center;font-size:22px;background:#eaf2ff}
+.stat strong{display:block;font-size:24px}
+.stat span{color:var(--muted);font-size:12px}
+.panel{padding:20px}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.panel-head h2{margin:0;font-size:20px}
+.panel-sub{color:var(--muted);font-size:13px;margin-top:4px}
+.notice{display:none;background:#fff8df;border:1px solid #f2d477;color:#72570b;padding:14px 16px;border-radius:15px;margin:14px 0}
+.notice.show{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.install-guide{display:none;background:#edf5ff;border:1px solid #bcd6ff;border-radius:15px;padding:14px 16px;margin:14px 0;line-height:1.55}
+.install-guide.show{display:block}
+.install-guide strong{color:#0b4fb3}
+.small{color:var(--muted);font-size:13px}
+.desktop-table{width:100%;border-collapse:collapse}
+.desktop-table th{text-align:left;padding:11px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)}
+.desktop-table td{padding:13px 10px;border-bottom:1px solid #edf1f6;font-size:14px}
+.case-no{font-weight:900}
+.badge{display:inline-flex;padding:6px 10px;border-radius:999px;background:#edf2f8;font-weight:800;font-size:12px}
+.badge.sent{background:#fff0e0;color:#9b5a00}
+.badge.opened{background:#eaf2ff;color:#1356a8}
+.badge.accepted{background:#e7f7ee;color:#176b3b}
+.badge.rejected{background:#fdecec;color:#a82929}
+.mobile-cases{display:none}
+.case-card{border:1px solid var(--line);border-radius:17px;padding:15px;background:#fff;box-shadow:0 7px 18px rgba(30,71,121,.05)}
+.case-card+.case-card{margin-top:10px}
+.case-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.case-card h3{margin:0;font-size:17px}
+.case-card .meta{margin:6px 0 12px;color:var(--muted);font-size:13px;line-height:1.5}
+.case-card .btn{width:100%}
+.empty{padding:34px;text-align:center;color:var(--muted);border:1px dashed #cfd9e7;border-radius:16px}
+.footer-note{text-align:center;color:#8a95a8;font-size:12px;margin:20px 0 4px}
+@media(max-width:850px){.hero{grid-template-columns:1fr}.stats{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){
+  body{background:#f4f7fb}
+  .app-shell{padding:10px 10px calc(24px + env(safe-area-inset-bottom))}
+  .app-header{top:6px;padding:12px;border-radius:18px;align-items:flex-start}
+  .app-icon{width:48px;height:48px;border-radius:14px}
+  .brand h1{font-size:20px}
+  .doctor-meta{font-size:12px;max-width:190px}
+  .header-actions{gap:6px}
+  .header-actions .btn{padding:9px 11px;font-size:12px}
+  .hero{margin:12px 0;gap:10px}
+  .welcome-card{padding:18px;border-radius:18px}
+  .welcome-card h2{font-size:21px}
+  .notify-card{border-radius:18px}
+  .stats{grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .stat{padding:12px 10px;display:block;text-align:center;border-radius:16px}
+  .stat-icon{width:36px;height:36px;margin:0 auto 7px}
+  .stat strong{font-size:20px}
+  .stat span{font-size:10px}
+  .panel{padding:14px;border-radius:18px}
+  .desktop-table{display:none}
+  .mobile-cases{display:block}
+  .notification-actions{width:100%}
+  .notification-actions .btn{min-width:0}
+}
+@media(max-width:430px){
+  .app-header{display:block}
+  .header-actions{margin-top:10px;justify-content:stretch}
+  .header-actions .btn{flex:1}
+  .doctor-meta{max-width:100%}
+  .notification-actions{display:grid;grid-template-columns:1fr 1fr}
+}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="topbar">
-    <div class="brand">
-      <h1>ACT Doctor Call</h1>
-      <div class="sub">{{ display_name }} · {{ doctor_specialty }}</div>
+<div class="app-shell">
+  <header class="app-header">
+    <div class="brand-wrap">
+      <img class="app-icon" src="/app-icon-192.png" alt="ACT">
+      <div class="brand">
+        <h1>ACT Doctor Call</h1>
+        <div class="doctor-meta">{{ display_name }} · {{ doctor_specialty }}</div>
+      </div>
     </div>
-    <div class="top-actions">
-      <button id="installApp" class="btn primary" type="button">Install App 📲</button>
-      <a class="btn light" href="/change-password">Change Password</a>
+    <div class="header-actions">
+      <button id="installApp" class="btn primary" type="button">📲 Install</button>
+      <a class="btn light" href="/change-password">🔐 Password</a>
       <a class="btn light" href="/logout">Logout</a>
     </div>
-  </div>
+  </header>
 
   <div id="installGuide" class="install-guide">
-    <strong>Install ACT Doctor Call on your phone</strong>
+    <strong>Install ACT Doctor Call</strong>
     <div id="installGuideText" class="small" style="margin-top:5px">
-      Android: use Chrome and tap Install App. iPhone: open in Safari → Share → Add to Home Screen.
+      Android: tap Install. iPhone: Safari → Share → Add to Home Screen.
     </div>
   </div>
 
@@ -720,38 +807,81 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}.badge{display:inline-b
     <a id="newCaseLink" class="btn primary" href="/doctor-call/doctor">Open Case</a>
   </div>
 
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-      <div>
-        <h2 style="margin:0 0 6px">Phone Notifications 🔔</h2>
-        <div id="notificationStatus" class="small">Checking notification status...</div>
-      </div>
+  <section class="hero">
+    <div class="welcome-card">
+      <h2>Good day, {{ display_name }}</h2>
+      <p>Your {{ doctor_specialty }} cases appear here only. Open the PDF, review the case, then Accept or Reject.</p>
+    </div>
+    <div class="notify-card">
+      <div class="notify-title"><span id="statusDot" class="status-dot"></span> Phone Notifications</div>
+      <div id="notificationStatus" class="status-text">Checking notification status...</div>
       <div class="notification-actions">
-        <button id="enableNotifications" class="btn primary" type="button">Enable Notifications</button>
-        <button id="testNotification" class="btn light" type="button">Test Notification</button>
+        <button id="enableNotifications" class="btn primary" type="button">Enable</button>
+        <button id="testNotification" class="btn light" type="button">Test 🔔</button>
       </div>
     </div>
-  </div>
+  </section>
 
-  <div class="card">
-    <h2 style="margin-top:0">Doctor Inbox</h2>
-    <table>
+  <section class="stats">
+    <div class="stat">
+      <div class="stat-icon">🆕</div>
+      <div><strong>{{ new_count }}</strong><span>New cases</span></div>
+    </div>
+    <div class="stat">
+      <div class="stat-icon">👀</div>
+      <div><strong>{{ review_count }}</strong><span>In review</span></div>
+    </div>
+    <div class="stat">
+      <div class="stat-icon">✅</div>
+      <div><strong>{{ completed_count }}</strong><span>Completed</span></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <h2>Doctor Inbox</h2>
+        <div class="panel-sub">Cases assigned specifically to your account</div>
+      </div>
+      <span class="badge">{{ cases|length }} total</span>
+    </div>
+
+    {% if cases %}
+    <table class="desktop-table">
       <thead><tr><th>Case</th><th>Specialty</th><th>Status</th><th>Sent</th><th></th></tr></thead>
       <tbody>
       {% for c in cases %}
         <tr>
-          <td>{{ c['case_no'] }}</td>
+          <td class="case-no">{{ c['case_no'] }}</td>
           <td>{{ c['specialty'] }}</td>
-          <td><span class="badge">{{ c['status'] }}</span></td>
+          <td><span class="badge {{ (c['status'] or '')|lower }}">{{ c['status'] }}</span></td>
           <td>{{ c['sent_at'] }}</td>
-          <td><a class="btn primary" href="/doctor-call/case/{{ c['id'] }}">Open Case</a></td>
+          <td><a class="btn primary" href="/doctor-call/case/{{ c['id'] }}">Open Case →</a></td>
         </tr>
-      {% else %}
-        <tr><td colspan="5" class="small">No cases assigned to you.</td></tr>
       {% endfor %}
       </tbody>
     </table>
-  </div>
+
+    <div class="mobile-cases">
+      {% for c in cases %}
+      <article class="case-card">
+        <div class="case-card-top">
+          <div>
+            <h3>{{ c['case_no'] }}</h3>
+            <div class="meta">{{ c['specialty'] }}<br>{{ c['sent_at'] }}</div>
+          </div>
+          <span class="badge {{ (c['status'] or '')|lower }}">{{ c['status'] }}</span>
+        </div>
+        <a class="btn primary" href="/doctor-call/case/{{ c['id'] }}">Open Case →</a>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+      <div class="empty">No cases assigned to you right now.</div>
+    {% endif %}
+  </section>
+
+  <div class="footer-note">ACT Doctor Call · Secure doctor-specific case review</div>
 </div>
 
 <script>
@@ -760,6 +890,7 @@ let deferredInstallPrompt = null;
 const installButton = document.getElementById("installApp");
 const installGuide = document.getElementById("installGuide");
 const installGuideText = document.getElementById("installGuideText");
+const statusDot = document.getElementById("statusDot");
 
 function isStandaloneMode(){
   return window.matchMedia("(display-mode: standalone)").matches
@@ -777,14 +908,14 @@ function refreshInstallUI(){
     return;
   }
 
-  installButton.style.display="inline-block";
+  installButton.style.display="inline-flex";
 
   if(isIOSDevice()){
     installGuideText.textContent =
-      "iPhone/iPad: open ACT in Safari → tap Share → Add to Home Screen → Add.";
+      "iPhone/iPad: open ACT in Safari → Share → Add to Home Screen → Add.";
   }else{
     installGuideText.textContent =
-      "Android: tap Install App. If no prompt appears, open Chrome menu (⋮) → Install app / Add to Home screen.";
+      "Android: tap Install. If no prompt appears, Chrome menu (⋮) → Install app / Add to Home screen.";
   }
 }
 
@@ -801,9 +932,7 @@ window.addEventListener("appinstalled", ()=>{
 });
 
 installButton.addEventListener("click", async ()=>{
-  if(isStandaloneMode()){
-    return;
-  }
+  if(isStandaloneMode()) return;
 
   if(deferredInstallPrompt){
     deferredInstallPrompt.prompt();
@@ -835,12 +964,16 @@ function setStatus(message, enabled=false){
   const bt=document.getElementById("enableNotifications");
   st.textContent=message;
   if(enabled){
-    bt.textContent="Notifications Enabled ✅";
+    bt.textContent="Enabled ✅";
     bt.className="btn success";
+    statusDot.style.background="#18a05e";
+    statusDot.style.boxShadow="0 0 0 5px rgba(24,160,94,.12)";
   } else {
-    bt.textContent="Enable Notifications";
+    bt.textContent="Enable";
     bt.className="btn primary";
     bt.disabled=false;
+    statusDot.style.background="#f0a000";
+    statusDot.style.boxShadow="0 0 0 5px rgba(240,160,0,.12)";
   }
 }
 
@@ -935,7 +1068,7 @@ async function registerPush(){
 
   const data=await saveSubscription(sub);
   if(data.ok){
-    setStatus("Notifications active on "+data.devices+" device(s).",true);
+    setStatus("Active on "+data.devices+" device(s).",true);
     return true;
   }
 
@@ -948,7 +1081,7 @@ async function refreshPushStatus(){
     const resp=await fetch("/doctor-call/api/push/status",{cache:"no-store"});
     const data=await resp.json();
     if(data.ok && data.devices>0 && Notification.permission==="granted"){
-      setStatus("Notifications active on "+data.devices+" device(s).",true);
+      setStatus("Active on "+data.devices+" device(s).",true);
     }
   }catch(e){console.warn(e);}
 }
@@ -967,7 +1100,7 @@ async function testNotification(){
     const resp=await fetch("/doctor-call/api/push/test",{method:"POST"});
     const data=await resp.json();
     if(data.ok){
-      setStatus("Test sent to "+data.sent+" of "+data.registered+" registered device(s).",true);
+      setStatus("Test delivered to "+data.sent+" of "+data.registered+" device(s).",true);
       if(document.visibilityState==="visible") playDoctorAlert();
     }else{
       setStatus(data.error||"Could not send test notification.");
@@ -1016,12 +1149,12 @@ window.addEventListener("load",async()=>{
     if(sub && Notification.permission==="granted"){
       const data=await saveSubscription(sub);
       if(data.ok){
-        setStatus("Notifications active on "+data.devices+" device(s).",true);
+        setStatus("Active on "+data.devices+" device(s).",true);
       }
     }else if(Notification.permission==="denied"){
       setStatus("Notifications are blocked in browser settings.");
     }else{
-      setStatus("Tap Enable Notifications on this device.");
+      setStatus("Tap Enable on this device.");
     }
 
     await refreshPushStatus();
@@ -1037,7 +1170,159 @@ setInterval(checkLatestCase,8000);
 </html>
 """
 
-DOCTOR_CALL_CASE_HTML = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Case {{ case[\'case_no\'] }}</title><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1100px;margin:auto;padding:20px 16px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.brand h1{margin:0;font-size:27px}.sub{color:#6b7280;margin-top:4px}.top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.btn{display:inline-block;border:0;border-radius:10px;padding:11px 15px;font-weight:bold;text-decoration:none;cursor:pointer}.primary{background:#1f6feb;color:white}.success{background:#14804a;color:white}.danger{background:#c93c37;color:white}.light{background:white;border:1px solid #e5e7eb;color:#172033}.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 6px 18px rgba(0,0,0,.035)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}label{display:block;color:#6b7280;font-size:13px;margin-bottom:6px}input,select{width:100%;padding:12px;border:1px solid #d5dae2;border-radius:10px;background:white;font-size:15px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #e5e7eb;font-size:14px}th{color:#6b7280;font-size:12px;text-transform:uppercase}.badge{display:inline-block;padding:6px 9px;border-radius:999px;background:#e8eef8;font-weight:bold;font-size:12px}.small{color:#6b7280;font-size:13px}.notice{background:#e9f8ef;border:1px solid #9bd6ad;color:#176b36;padding:11px;border-radius:10px;margin-bottom:14px}.actions{display:flex;gap:10px;flex-wrap:wrap}iframe{width:100%;height:72vh;border:1px solid #e5e7eb;border-radius:12px}.module-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}@media(max-width:700px){.grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}table{display:block;overflow-x:auto;white-space:nowrap}}</style></head><body><div class="wrap"><div class="topbar"><div class="brand"><h1>Case {{ case[\'case_no\'] }}</h1><div class="sub">{{ case[\'specialty\'] }} · {{ doctor_name }} · {{ case[\'status\'] }}</div></div><div class="top-actions">{% if role == \'doctor\' %}<a class="btn light" href="/doctor-call/doctor">Inbox</a>{% else %}<a class="btn light" href="/doctor-call">Cases</a>{% endif %}</div></div>{% if role == \'doctor\' and case[\'status\'] not in [\'Accepted\',\'Rejected\'] %}<div class="card"><div class="actions"><form method="post" action="/doctor-call/case/{{ case[\'id\'] }}/decision/Accepted"><button class="btn success">Accept ✅</button></form><form method="post" action="/doctor-call/case/{{ case[\'id\'] }}/decision/Rejected"><button class="btn danger">Reject ❌</button></form></div></div>{% endif %}<div class="card"><iframe src="/doctor-call/case/{{ case[\'id\'] }}/pdf"></iframe></div></div></body></html>'
+DOCTOR_CALL_CASE_HTML = """
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+{% if role == 'doctor' %}
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/app-icon-192.png">
+{% endif %}
+<meta name="theme-color" content="#0b5fd7">
+<title>Case {{ case['case_no'] }}</title>
+<style>
+:root{--bg:#eef4fb;--surface:#fff;--text:#152238;--muted:#6b7890;--blue:#1267e5;--green:#178754;--red:#d94242;--line:#dfe7f2;--shadow:0 14px 34px rgba(30,71,121,.09)}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:linear-gradient(180deg,#eaf2fb,#f7f9fc 420px);color:var(--text)}
+.shell{max-width:1180px;margin:auto;padding:18px}
+.header{display:flex;justify-content:space-between;align-items:center;gap:12px;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:20px;padding:15px 17px;box-shadow:var(--shadow);position:sticky;top:10px;z-index:10}
+.brand{display:flex;align-items:center;gap:12px}.brand img{width:48px;height:48px;border-radius:14px}.brand h1{margin:0;font-size:21px}.sub{color:var(--muted);font-size:13px;margin-top:4px}
+.btn{border:0;border-radius:12px;padding:11px 14px;font-weight:800;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.primary{background:linear-gradient(135deg,#1267e5,#2785f5);color:white}.success{background:var(--green);color:white}.danger{background:var(--red);color:white}.light{background:white;color:var(--text);border:1px solid var(--line)}
+.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}
+.info{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 7px 18px rgba(30,71,121,.05)}.label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em}.value{font-weight:900;margin-top:5px;word-break:break-word}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}.actions form{margin:0}.actions .btn{min-width:150px}
+.pdf-card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:13px;box-shadow:var(--shadow)}
+.pdf-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 4px 12px}.pdf-head h2{margin:0;font-size:18px}
+iframe{width:100%;height:72vh;border:1px solid #e2e8f0;border-radius:14px;background:#f8fafc}
+@media(max-width:760px){.shell{padding:10px 10px calc(20px + env(safe-area-inset-bottom))}.header{top:6px;border-radius:17px}.brand img{width:42px;height:42px}.brand h1{font-size:18px}.info-grid{grid-template-columns:1fr 1fr}.actions{display:grid;grid-template-columns:1fr 1fr;position:sticky;bottom:8px;z-index:8;background:rgba(247,249,252,.9);padding:8px;border-radius:16px;backdrop-filter:blur(10px)}.actions form,.actions .btn{width:100%;min-width:0}iframe{height:66vh}.pdf-head{align-items:flex-start;flex-direction:column}.pdf-head .btn{width:100%}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="header">
+    <div class="brand">
+      <img src="/app-icon-192.png" alt="ACT">
+      <div>
+        <h1>Case {{ case['case_no'] }}</h1>
+        <div class="sub">{{ case['specialty'] }} · {{ doctor_name }}</div>
+      </div>
+    </div>
+    {% if role == 'doctor' %}
+      <a class="btn light" href="/doctor-call/doctor">← Inbox</a>
+    {% else %}
+      <a class="btn light" href="/doctor-call">← Cases</a>
+    {% endif %}
+  </header>
+
+  <section class="info-grid">
+    <div class="info"><div class="label">Status</div><div class="value">{{ case['status'] }}</div></div>
+    <div class="info"><div class="label">Specialty</div><div class="value">{{ case['specialty'] }}</div></div>
+    <div class="info"><div class="label">Patient Ref.</div><div class="value">{{ case['patient_ref'] or '-' }}</div></div>
+    <div class="info"><div class="label">Sent</div><div class="value">{{ case['sent_at'] }}</div></div>
+  </section>
+
+  {% if role == 'doctor' and case['status'] not in ['Accepted','Rejected'] %}
+  <div class="actions">
+    <form method="post" action="/doctor-call/case/{{ case['id'] }}/decision/Accepted">
+      <button class="btn success" type="submit">✓ Accept Case</button>
+    </form>
+    <form method="post" action="/doctor-call/case/{{ case['id'] }}/decision/Rejected">
+      <button class="btn danger" type="submit">✕ Reject Case</button>
+    </form>
+  </div>
+  {% endif %}
+
+  <section class="pdf-card">
+    <div class="pdf-head">
+      <h2>Medical Report PDF</h2>
+      <a class="btn primary" target="_blank" href="/doctor-call/case/{{ case['id'] }}/pdf">Open PDF ↗</a>
+    </div>
+    <iframe src="/doctor-call/case/{{ case['id'] }}/pdf"></iframe>
+  </section>
+</div>
+</body>
+</html>
+"""
+
+DOCTOR_CALL_INSTALL_HTML = """
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/app-icon-192.png">
+<meta name="theme-color" content="#0b5fd7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ACT Doctor Call">
+<title>Install ACT Doctor Call</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:radial-gradient(circle at top,#dcecff,#f6f8fc 52%);color:#142238;min-height:100vh;display:grid;place-items:center;padding:22px}
+.card{width:min(620px,100%);background:rgba(255,255,255,.94);border:1px solid #dce5f1;border-radius:28px;padding:28px;box-shadow:0 24px 70px rgba(25,72,132,.15);text-align:center}
+.icon{width:110px;height:110px;border-radius:28px;box-shadow:0 14px 30px rgba(11,95,215,.22)}
+h1{font-size:31px;margin:17px 0 7px}.sub{color:#66758c;line-height:1.6;margin-bottom:20px}
+.btn{width:100%;border:0;border-radius:14px;padding:14px 18px;font-weight:900;font-size:17px;cursor:pointer;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px}
+.primary{background:linear-gradient(135deg,#0b5fd7,#2785f5);color:#fff;box-shadow:0 10px 24px rgba(11,95,215,.22)}
+.light{margin-top:9px;background:#fff;color:#142238;border:1px solid #dce5f1}
+.guide{margin-top:18px;text-align:left;background:#f4f8fd;border:1px solid #dae7f7;border-radius:16px;padding:16px;color:#5c6c82;line-height:1.7}
+.guide strong{color:#173f75}.tiny{font-size:12px;color:#8793a5;margin-top:17px}
+@media(max-width:520px){.card{padding:22px 17px;border-radius:22px}.icon{width:92px;height:92px;border-radius:24px}h1{font-size:26px}}
+</style>
+</head>
+<body>
+<main class="card">
+  <img class="icon" src="/app-icon-192.png" alt="ACT Doctor Call">
+  <h1>ACT Doctor Call</h1>
+  <div class="sub">Install the doctor app on your phone for faster access, case alerts, PDF review, and Accept / Reject.</div>
+  <button id="installNow" class="btn primary" type="button">📲 Install ACT Doctor Call</button>
+  <a class="btn light" href="/login">Open Login Page</a>
+
+  <div id="guide" class="guide">
+    <strong>Android:</strong> Open this page in Chrome, then tap <b>Install ACT Doctor Call</b>. If no prompt appears, Chrome menu (⋮) → Install app / Add to Home screen.<br>
+    <strong>iPhone:</strong> Open this page in Safari → Share → Add to Home Screen → Add.
+  </div>
+  <div class="tiny">After installation, the ACT icon opens directly to the Doctor Inbox. Login is still required for security.</div>
+</main>
+<script>
+let deferredInstallPrompt=null;
+const installNow=document.getElementById("installNow");
+const guide=document.getElementById("guide");
+
+function standalone(){
+  return window.matchMedia("(display-mode: standalone)").matches
+    || window.navigator.standalone===true;
+}
+window.addEventListener("beforeinstallprompt",event=>{
+  event.preventDefault();
+  deferredInstallPrompt=event;
+});
+window.addEventListener("appinstalled",()=>{
+  deferredInstallPrompt=null;
+  installNow.textContent="Installed ✅";
+  installNow.disabled=true;
+});
+installNow.addEventListener("click",async()=>{
+  if(standalone()){
+    installNow.textContent="Already Installed ✅";
+    return;
+  }
+  if(deferredInstallPrompt){
+    deferredInstallPrompt.prompt();
+    try{await deferredInstallPrompt.userChoice;}catch(e){}
+    deferredInstallPrompt=null;
+  }else{
+    guide.scrollIntoView({behavior:"smooth",block:"center"});
+  }
+});
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("/sw.js").catch(()=>{});
+}
+</script>
+</body>
+</html>
+"""
 
 DOCTOR_CALL_ADMIN_HTML = """
 <!doctype html>
@@ -5309,6 +5594,11 @@ def doctor_call_new():
     ))
 
 
+@app.route("/doctor-call/install")
+def doctor_call_install():
+    return render_template_string(DOCTOR_CALL_INSTALL_HTML)
+
+
 @app.route("/doctor-call/doctor")
 @login_required
 def doctor_call_doctor():
@@ -5339,13 +5629,29 @@ def doctor_call_doctor():
 
     conn.close()
 
+    new_count = sum(
+        1 for item in cases
+        if item["status"] == "Sent"
+    )
+    review_count = sum(
+        1 for item in cases
+        if item["status"] == "Opened"
+    )
+    completed_count = sum(
+        1 for item in cases
+        if item["status"] in ("Accepted", "Rejected")
+    )
+
     return render_template_string(
         DOCTOR_CALL_DOCTOR_HTML,
         cases=cases,
         display_name=session.get("display", session["username"]),
         doctor_specialty=(profile["specialty"] if profile else "Doctor"),
         vapid_public_key=ensure_vapid_keys(),
-        latest_case_id=(latest_row["latest_id"] if latest_row else 0)
+        latest_case_id=(latest_row["latest_id"] if latest_row else 0),
+        new_count=new_count,
+        review_count=review_count,
+        completed_count=completed_count
     )
 
 
