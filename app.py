@@ -160,7 +160,7 @@ MODULES_HTML_V31 = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<link rel="icon" href="/app-icon.svg">
+<link rel="icon" href="/app-icon.svg?v=4-4-1">
 <meta name="theme-color" content="#0b5fd7">
 <title>ACT Operations</title>
 <style>
@@ -278,7 +278,7 @@ a{color:inherit}
 <div class="shell">
   <header class="appbar">
     <div class="appbar-brand">
-      <img class="logo" src="/app-icon.svg" alt="ACT">
+      <img class="logo" src="/app-icon.svg?v=4-4-1" alt="ACT">
       <h1>ACT Operations</h1>
     </div>
     <div class="user-chip">👤 {{ display_name }}</div>
@@ -489,7 +489,7 @@ input:focus,select:focus{border-color:#7eaef1;box-shadow:0 0 0 4px rgba(18,103,2
 <div class="wrap">
   <div class="topbar">
     <div class="brand-wrap">
-      <img class="brand-icon" src="/app-icon.svg" alt="ACT">
+      <img class="brand-icon" src="/app-icon.svg?v=4-4-1" alt="ACT">
       <div class="brand">
         <h1>ACT Doctor Call</h1>
         <div class="sub">{{ 'Admin' if role == 'admin' else 'Insurance' }} · Smart Clinical Referral</div>
@@ -1006,8 +1006,8 @@ DOCTOR_CALL_DOCTOR_HTML = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/app-icon.svg">
+<link rel="manifest" href="/manifest.json?v=4-4-1">
+<link rel="apple-touch-icon" href="/app-icon.svg?v=4-4-1">
 <meta name="theme-color" content="#0b5fd7">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -1119,7 +1119,7 @@ button,a,input{font:inherit}
 <div class="app-shell">
   <header class="app-header">
     <div class="brand-wrap">
-      <img class="app-icon" src="/app-icon.svg" alt="ACT">
+      <img class="app-icon" src="/app-icon.svg?v=4-4-1" alt="ACT">
       <div class="brand">
         <h1>ACT Doctor Call</h1>
         <div class="doctor-meta">{{ display_name }} · {{ doctor_specialty }}</div>
@@ -1520,8 +1520,8 @@ DOCTOR_CALL_CASE_HTML = """
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 {% if role == 'doctor' %}
-<link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/app-icon.svg">
+<link rel="manifest" href="/manifest.json?v=4-4-1">
+<link rel="apple-touch-icon" href="/app-icon.svg?v=4-4-1">
 {% endif %}
 <meta name="theme-color" content="#0b5fd7">
 <title>Case {{ case['case_no'] }}</title>
@@ -1546,7 +1546,7 @@ iframe{width:100%;height:72vh;border:1px solid #e2e8f0;border-radius:14px;backgr
 <div class="shell">
   <header class="header">
     <div class="brand">
-      <img src="/app-icon.svg" alt="ACT">
+      <img src="/app-icon.svg?v=4-4-1" alt="ACT">
       <div>
         <h1>Case {{ case['case_no'] }}</h1>
         <div class="sub">{{ case['specialty'] }} · {{ doctor_name }}</div>
@@ -1598,8 +1598,8 @@ DOCTOR_CALL_INSTALL_HTML = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/app-icon.svg">
+<link rel="manifest" href="/manifest.json?v=4-4-1">
+<link rel="apple-touch-icon" href="/app-icon.svg?v=4-4-1">
 <meta name="theme-color" content="#0b5fd7">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="ACT Doctor Call">
@@ -1619,7 +1619,7 @@ h1{font-size:31px;margin:17px 0 7px}.sub{color:#66758c;line-height:1.6;margin-bo
 </head>
 <body>
 <main class="card">
-  <img class="icon" src="/app-icon.svg" alt="ACT Doctor Call">
+  <img class="icon" src="/app-icon.svg?v=4-4-1" alt="ACT Doctor Call">
   <h1>ACT Doctor Call</h1>
   <div class="sub">Install the doctor app on your phone for faster access, case alerts, PDF review, and Accept / Reject.</div>
   <button id="installNow" class="btn primary" type="button">📲 Install ACT Doctor Call</button>
@@ -1750,7 +1750,7 @@ DOCTOR_CALL_ADMIN_HTML = """
 <div class="wrap">
   <div class="topbar">
     <div class="brand-wrap">
-      <img class="brand-icon" src="/app-icon.svg" alt="ACT">
+      <img class="brand-icon" src="/app-icon.svg?v=4-4-1" alt="ACT">
       <div class="brand">
         <h1>Doctors Directory</h1>
         <div class="sub">ACT Doctor Call · specialties, availability and account management</div>
@@ -6553,7 +6553,7 @@ self.addEventListener("push", event => {
         renotify: true,
         requireInteraction: true,
         silent: false,
-        icon: "/app-icon.svg",
+        icon: "/app-icon.svg?v=4-4-1",
         vibrate: [900, 180, 900, 180, 900, 180, 1600],
         data: {url: data.url || "/doctor-call/doctor"}
       };
@@ -6629,13 +6629,13 @@ MANIFEST_JSON_V31 = json.dumps({
     ),
     "icons": [
         {
-            "src": "/app-icon.svg",
+            "src": "/app-icon.svg?v=4-4-1",
             "sizes": "any",
             "type": "image/svg+xml",
             "purpose": "any"
         },
         {
-            "src": "/app-icon.svg",
+            "src": "/app-icon.svg?v=4-4-1",
             "sizes": "any",
             "type": "image/svg+xml",
             "purpose": "maskable"
@@ -6648,7 +6648,7 @@ MANIFEST_JSON_V31 = json.dumps({
             "url": "/doctor-call/doctor",
             "icons": [
                 {
-                    "src": "/app-icon.svg",
+                    "src": "/app-icon.svg?v=4-4-1",
                     "sizes": "any",
                     "type": "image/svg+xml"
                 }
@@ -6669,7 +6669,7 @@ def service_worker():
     return response
 
 
-@app.route("/manifest.json")
+@app.route("/manifest.json?v=4-4-1")
 def manifest_json():
     response = Response(
         MANIFEST_JSON_V31,
@@ -6681,9 +6681,7 @@ def manifest_json():
 
 @app.route("/app-icon-192.png")
 def app_icon_192():
-    return redirect(
-        url_for("static", filename="act-doctor-call-icon.png")
-    )
+    return redirect("/app-icon.svg?v=4-4-1", code=302)
 
 
 @app.route("/app-icon.svg")
@@ -6692,7 +6690,7 @@ def app_icon_svg():
         APP_ICON_SVG,
         mimetype="image/svg+xml"
     )
-    response.headers["Cache-Control"] = "public, max-age=86400"
+    response.headers["Cache-Control"] = "no-store, max-age=0"
     return response
 
 
