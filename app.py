@@ -1007,7 +1007,7 @@ DOCTOR_CALL_DOCTOR_HTML = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<link rel="manifest" href="/manifest.json?v=4-4-2">
+<link rel="manifest" href="/manifest.json?v=4-4-3">
 <link rel="apple-touch-icon" href="/app-icon-192.png?v=4-4-2">
 <meta name="theme-color" content="#0b5fd7">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1521,7 +1521,7 @@ DOCTOR_CALL_CASE_HTML = """
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 {% if role == 'doctor' %}
-<link rel="manifest" href="/manifest.json?v=4-4-2">
+<link rel="manifest" href="/manifest.json?v=4-4-3">
 <link rel="apple-touch-icon" href="/app-icon-192.png?v=4-4-2">
 {% endif %}
 <meta name="theme-color" content="#0b5fd7">
@@ -1599,7 +1599,7 @@ DOCTOR_CALL_INSTALL_HTML = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<link rel="manifest" href="/manifest.json?v=4-4-2">
+<link rel="manifest" href="/manifest.json?v=4-4-3">
 <link rel="apple-touch-icon" href="/app-icon-192.png?v=4-4-2">
 <meta name="theme-color" content="#0b5fd7">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6701,7 +6701,7 @@ def service_worker():
     return response
 
 
-@app.route("/manifest.json?v=4-4-2")
+@app.route("/manifest.json")
 def manifest_json():
     response = Response(
         MANIFEST_JSON_V31,
