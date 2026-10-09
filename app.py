@@ -161,7 +161,7 @@ MODULES_HTML_V31 = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<link rel="icon" href="/app-icon-192.png?v=4-4-2">
+<link rel="icon" href="/app-icon-192.png?v=4-4-4">
 <meta name="theme-color" content="#0b5fd7">
 <title>ACT Operations</title>
 <style>
@@ -279,7 +279,7 @@ a{color:inherit}
 <div class="shell">
   <header class="appbar">
     <div class="appbar-brand">
-      <img class="logo" src="/app-icon-192.png?v=4-4-2" alt="ACT">
+      <img class="logo" src="/app-icon-192.png?v=4-4-4" alt="ACT">
       <h1>ACT Operations</h1>
     </div>
     <div class="user-chip">👤 {{ display_name }}</div>
@@ -490,7 +490,7 @@ input:focus,select:focus{border-color:#7eaef1;box-shadow:0 0 0 4px rgba(18,103,2
 <div class="wrap">
   <div class="topbar">
     <div class="brand-wrap">
-      <img class="brand-icon" src="/app-icon-192.png?v=4-4-2" alt="ACT">
+      <img class="brand-icon" src="/app-icon-192.png?v=4-4-4" alt="ACT">
       <div class="brand">
         <h1>ACT Doctor Call</h1>
         <div class="sub">{{ 'Admin' if role == 'admin' else 'Insurance' }} · Smart Clinical Referral</div>
@@ -1007,8 +1007,8 @@ DOCTOR_CALL_DOCTOR_HTML = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<link rel="manifest" href="/manifest.json?v=4-4-3">
-<link rel="apple-touch-icon" href="/app-icon-192.png?v=4-4-2">
+<link rel="manifest" href="/manifest.json?v=4-4-4">
+<link rel="apple-touch-icon" href="/app-icon-192.png?v=4-4-4">
 <meta name="theme-color" content="#0b5fd7">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -1120,7 +1120,7 @@ button,a,input{font:inherit}
 <div class="app-shell">
   <header class="app-header">
     <div class="brand-wrap">
-      <img class="app-icon" src="/app-icon-192.png?v=4-4-2" alt="ACT">
+      <img class="app-icon" src="/app-icon-192.png?v=4-4-4" alt="ACT">
       <div class="brand">
         <h1>ACT Doctor Call</h1>
         <div class="doctor-meta">{{ display_name }} · {{ doctor_specialty }}</div>
@@ -1521,8 +1521,8 @@ DOCTOR_CALL_CASE_HTML = """
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 {% if role == 'doctor' %}
-<link rel="manifest" href="/manifest.json?v=4-4-3">
-<link rel="apple-touch-icon" href="/app-icon-192.png?v=4-4-2">
+<link rel="manifest" href="/manifest.json?v=4-4-4">
+<link rel="apple-touch-icon" href="/app-icon-192.png?v=4-4-4">
 {% endif %}
 <meta name="theme-color" content="#0b5fd7">
 <title>Case {{ case['case_no'] }}</title>
@@ -1547,7 +1547,7 @@ iframe{width:100%;height:72vh;border:1px solid #e2e8f0;border-radius:14px;backgr
 <div class="shell">
   <header class="header">
     <div class="brand">
-      <img src="/app-icon-192.png?v=4-4-2" alt="ACT">
+      <img src="/app-icon-192.png?v=4-4-4" alt="ACT">
       <div>
         <h1>Case {{ case['case_no'] }}</h1>
         <div class="sub">{{ case['specialty'] }} · {{ doctor_name }}</div>
@@ -1599,8 +1599,8 @@ DOCTOR_CALL_INSTALL_HTML = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<link rel="manifest" href="/manifest.json?v=4-4-3">
-<link rel="apple-touch-icon" href="/app-icon-192.png?v=4-4-2">
+<link rel="manifest" href="/manifest.json?v=4-4-4">
+<link rel="apple-touch-icon" href="/app-icon-192.png?v=4-4-4">
 <meta name="theme-color" content="#0b5fd7">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="ACT Doctor Call">
@@ -1620,7 +1620,7 @@ h1{font-size:31px;margin:17px 0 7px}.sub{color:#66758c;line-height:1.6;margin-bo
 </head>
 <body>
 <main class="card">
-  <img class="icon" src="/app-icon-192.png?v=4-4-2" alt="ACT Doctor Call">
+  <img class="icon" src="/app-icon-192.png?v=4-4-4" alt="ACT Doctor Call">
   <h1>ACT Doctor Call</h1>
   <div class="sub">Install the doctor app on your phone for faster access, case alerts, PDF review, and Accept / Reject.</div>
   <button id="installNow" class="btn primary" type="button">📲 Install ACT Doctor Call</button>
@@ -1751,7 +1751,7 @@ DOCTOR_CALL_ADMIN_HTML = """
 <div class="wrap">
   <div class="topbar">
     <div class="brand-wrap">
-      <img class="brand-icon" src="/app-icon-192.png?v=4-4-2" alt="ACT">
+      <img class="brand-icon" src="/app-icon-192.png?v=4-4-4" alt="ACT">
       <div class="brand">
         <h1>Doctors Directory</h1>
         <div class="sub">ACT Doctor Call · specialties, availability and account management</div>
@@ -6554,7 +6554,7 @@ self.addEventListener("push", event => {
         renotify: true,
         requireInteraction: true,
         silent: false,
-        icon: "/app-icon.svg?v=4-4-1",
+        icon: "/app-icon-192.png?v=4-4-4",
         vibrate: [900, 180, 900, 180, 900, 180, 1600],
         data: {url: data.url || "/doctor-call/doctor"}
       };
@@ -6668,9 +6668,9 @@ MANIFEST_JSON_V31 = json.dumps({
         "and Accept/Reject workflow."
     ),
     "icons": [
-        {"src": "/app-icon-192.png?v=4-4-2", "sizes": "192x192",
+        {"src": "/app-icon-192.png?v=4-4-4", "sizes": "192x192",
          "type": "image/png", "purpose": "any"},
-        {"src": "/app-icon-512.png?v=4-4-2", "sizes": "512x512",
+        {"src": "/app-icon-512.png?v=4-4-4", "sizes": "512x512",
          "type": "image/png", "purpose": "any maskable"}
     ],
     "shortcuts": [
@@ -6680,7 +6680,7 @@ MANIFEST_JSON_V31 = json.dumps({
             "url": "/doctor-call/doctor",
             "icons": [
                 {
-                    "src": "/app-icon.svg?v=4-4-1",
+                    "src": "/app-icon-192.png?v=4-4-4",
                     "sizes": "any",
                     "type": "image/svg+xml"
                 }
@@ -6713,12 +6713,12 @@ def manifest_json():
 
 @app.route("/app-icon-192.png")
 def app_icon_192():
-    return send_file(doctor_icon_png(192), mimetype="image/png", max_age=0)
+    return send_file(BASE_DIR / "act-doctor-call-192.png", mimetype="image/png", max_age=0)
 
 
 @app.route("/app-icon-512.png")
 def app_icon_512():
-    return send_file(doctor_icon_png(512), mimetype="image/png", max_age=0)
+    return send_file(BASE_DIR / "act-doctor-call-512.png", mimetype="image/png", max_age=0)
 
 
 @app.route("/app-icon.svg")
