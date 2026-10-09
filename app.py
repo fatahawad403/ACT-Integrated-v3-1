@@ -8,6 +8,7 @@ import os
 import json
 import base64
 import io
+from PIL import Image, ImageDraw, ImageFont
 import re
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -160,7 +161,7 @@ MODULES_HTML_V31 = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<link rel="icon" href="/app-icon.svg?v=4-4-1">
+<link rel="icon" href="/app-icon-192.png?v=4-4-2">
 <meta name="theme-color" content="#0b5fd7">
 <title>ACT Operations</title>
 <style>
@@ -278,7 +279,7 @@ a{color:inherit}
 <div class="shell">
   <header class="appbar">
     <div class="appbar-brand">
-      <img class="logo" src="/app-icon.svg?v=4-4-1" alt="ACT">
+      <img class="logo" src="/app-icon-192.png?v=4-4-2" alt="ACT">
       <h1>ACT Operations</h1>
     </div>
     <div class="user-chip">👤 {{ display_name }}</div>
@@ -489,7 +490,7 @@ input:focus,select:focus{border-color:#7eaef1;box-shadow:0 0 0 4px rgba(18,103,2
 <div class="wrap">
   <div class="topbar">
     <div class="brand-wrap">
-      <img class="brand-icon" src="/app-icon.svg?v=4-4-1" alt="ACT">
+      <img class="brand-icon" src="/app-icon-192.png?v=4-4-2" alt="ACT">
       <div class="brand">
         <h1>ACT Doctor Call</h1>
         <div class="sub">{{ 'Admin' if role == 'admin' else 'Insurance' }} · Smart Clinical Referral</div>
@@ -1006,8 +1007,8 @@ DOCTOR_CALL_DOCTOR_HTML = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<link rel="manifest" href="/manifest.json?v=4-4-1">
-<link rel="apple-touch-icon" href="/app-icon.svg?v=4-4-1">
+<link rel="manifest" href="/manifest.json?v=4-4-2">
+<link rel="apple-touch-icon" href="/app-icon-192.png?v=4-4-2">
 <meta name="theme-color" content="#0b5fd7">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -1119,7 +1120,7 @@ button,a,input{font:inherit}
 <div class="app-shell">
   <header class="app-header">
     <div class="brand-wrap">
-      <img class="app-icon" src="/app-icon.svg?v=4-4-1" alt="ACT">
+      <img class="app-icon" src="/app-icon-192.png?v=4-4-2" alt="ACT">
       <div class="brand">
         <h1>ACT Doctor Call</h1>
         <div class="doctor-meta">{{ display_name }} · {{ doctor_specialty }}</div>
@@ -1520,8 +1521,8 @@ DOCTOR_CALL_CASE_HTML = """
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 {% if role == 'doctor' %}
-<link rel="manifest" href="/manifest.json?v=4-4-1">
-<link rel="apple-touch-icon" href="/app-icon.svg?v=4-4-1">
+<link rel="manifest" href="/manifest.json?v=4-4-2">
+<link rel="apple-touch-icon" href="/app-icon-192.png?v=4-4-2">
 {% endif %}
 <meta name="theme-color" content="#0b5fd7">
 <title>Case {{ case['case_no'] }}</title>
@@ -1546,7 +1547,7 @@ iframe{width:100%;height:72vh;border:1px solid #e2e8f0;border-radius:14px;backgr
 <div class="shell">
   <header class="header">
     <div class="brand">
-      <img src="/app-icon.svg?v=4-4-1" alt="ACT">
+      <img src="/app-icon-192.png?v=4-4-2" alt="ACT">
       <div>
         <h1>Case {{ case['case_no'] }}</h1>
         <div class="sub">{{ case['specialty'] }} · {{ doctor_name }}</div>
@@ -1598,8 +1599,8 @@ DOCTOR_CALL_INSTALL_HTML = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<link rel="manifest" href="/manifest.json?v=4-4-1">
-<link rel="apple-touch-icon" href="/app-icon.svg?v=4-4-1">
+<link rel="manifest" href="/manifest.json?v=4-4-2">
+<link rel="apple-touch-icon" href="/app-icon-192.png?v=4-4-2">
 <meta name="theme-color" content="#0b5fd7">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="ACT Doctor Call">
@@ -1619,7 +1620,7 @@ h1{font-size:31px;margin:17px 0 7px}.sub{color:#66758c;line-height:1.6;margin-bo
 </head>
 <body>
 <main class="card">
-  <img class="icon" src="/app-icon.svg?v=4-4-1" alt="ACT Doctor Call">
+  <img class="icon" src="/app-icon-192.png?v=4-4-2" alt="ACT Doctor Call">
   <h1>ACT Doctor Call</h1>
   <div class="sub">Install the doctor app on your phone for faster access, case alerts, PDF review, and Accept / Reject.</div>
   <button id="installNow" class="btn primary" type="button">📲 Install ACT Doctor Call</button>
@@ -1750,7 +1751,7 @@ DOCTOR_CALL_ADMIN_HTML = """
 <div class="wrap">
   <div class="topbar">
     <div class="brand-wrap">
-      <img class="brand-icon" src="/app-icon.svg?v=4-4-1" alt="ACT">
+      <img class="brand-icon" src="/app-icon-192.png?v=4-4-2" alt="ACT">
       <div class="brand">
         <h1>Doctors Directory</h1>
         <div class="sub">ACT Doctor Call · specialties, availability and account management</div>
@@ -6613,6 +6614,45 @@ APP_ICON_SVG = r'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"
 <text x="256" y="478" font-family="Arial,sans-serif" font-weight="800" font-size="27" fill="#062252" text-anchor="middle">Doctor Call</text>
 </svg>'''
 
+def doctor_icon_png(size=192):
+    """Raster PWA icon, generated without remote assets or redirects."""
+    scale = 3
+    n = size * scale
+    im = Image.new("RGB", (n, n), "#e8f9ff")
+    d = ImageDraw.Draw(im)
+    def box(coords, fill, radius=0, outline=None, width=1):
+        d.rounded_rectangle(tuple(int(v*n/512) for v in coords), radius=int(radius*n/512),
+                            fill=fill, outline=outline, width=max(1,int(width*n/512)))
+    def ellipse(coords, fill, outline=None, width=1):
+        d.ellipse(tuple(int(v*n/512) for v in coords), fill=fill, outline=outline,
+                  width=max(1,int(width*n/512)))
+    box((8,8,504,504),"#e8f9ff",104)
+    # Doctor silhouette and stethoscope
+    ellipse((145,55,357,280),"#063b76")
+    ellipse((173,117,339,300),"#ffffff")
+    box((132,299,380,417),"#ffffff",70,outline="#065a99",width=13)
+    ellipse((185,309,237,365),"#ffffff",outline="#063b76",width=11)
+    ellipse((284,319,334,369),"#02bce9",outline="#063b76",width=12)
+    # Red alert bell and two alert arcs
+    box((356,145,450,230),"#ff3441",38)
+    ellipse((386,219,420,250),"#ef2235")
+    d.arc((432*n//512,114*n//512,481*n//512,204*n//512),
+          -76,65,fill="#ff3441",width=max(3,n//44))
+    d.arc((447*n//512,91*n//512,507*n//512,221*n//512),
+          -76,65,fill="#ff3441",width=max(3,n//44))
+    box((85,388,427,499),"#e8f9ff",18)
+    try:
+        font=ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",int(n*.16))
+    except OSError:
+        font=ImageFont.load_default()
+    d.text((n//2,int(n*.77)),"ACT",anchor="mt",font=font,fill="#062252",stroke_width=0)
+    im=im.resize((size,size),Image.Resampling.LANCZOS)
+    output=io.BytesIO()
+    im.save(output,format="PNG")
+    output.seek(0)
+    return output
+
+
 MANIFEST_JSON_V31 = json.dumps({
     "id": "/doctor-call/doctor",
     "name": "ACT Doctor Call",
@@ -6628,18 +6668,10 @@ MANIFEST_JSON_V31 = json.dumps({
         "and Accept/Reject workflow."
     ),
     "icons": [
-        {
-            "src": "/app-icon.svg?v=4-4-1",
-            "sizes": "any",
-            "type": "image/svg+xml",
-            "purpose": "any"
-        },
-        {
-            "src": "/app-icon.svg?v=4-4-1",
-            "sizes": "any",
-            "type": "image/svg+xml",
-            "purpose": "maskable"
-        }
+        {"src": "/app-icon-192.png?v=4-4-2", "sizes": "192x192",
+         "type": "image/png", "purpose": "any"},
+        {"src": "/app-icon-512.png?v=4-4-2", "sizes": "512x512",
+         "type": "image/png", "purpose": "any maskable"}
     ],
     "shortcuts": [
         {
@@ -6669,7 +6701,7 @@ def service_worker():
     return response
 
 
-@app.route("/manifest.json?v=4-4-1")
+@app.route("/manifest.json?v=4-4-2")
 def manifest_json():
     response = Response(
         MANIFEST_JSON_V31,
@@ -6681,7 +6713,12 @@ def manifest_json():
 
 @app.route("/app-icon-192.png")
 def app_icon_192():
-    return redirect("/app-icon.svg?v=4-4-1", code=302)
+    return send_file(doctor_icon_png(192), mimetype="image/png", max_age=0)
+
+
+@app.route("/app-icon-512.png")
+def app_icon_512():
+    return send_file(doctor_icon_png(512), mimetype="image/png", max_age=0)
 
 
 @app.route("/app-icon.svg")
