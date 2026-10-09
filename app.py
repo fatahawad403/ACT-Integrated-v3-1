@@ -2546,6 +2546,10 @@ DASHBOARD_HTML = """
 <meta http-equiv="refresh" content="30">
 
 <title>ACT BedFlow</title>
+<link rel="manifest" href="/bedflow/manifest.json?v=1">
+<link rel="icon" href="/bedflow/icon-192.png?v=1">
+<link rel="apple-touch-icon" href="/bedflow/icon-192.png?v=1">
+<meta name="theme-color" content="#073466">
 
 <style>
 
@@ -2999,7 +3003,7 @@ select {
 
 <div class="container">
 
-    <header class="app-header">
+    <header class="app-header">\n<img src="/bedflow/icon-192.png?v=1" alt="ACT BedFlow" style="width:62px;height:62px;border-radius:16px;object-fit:cover;flex-shrink:0">
 
         <div class="brand">
             <h1>ACT BedFlow</h1>
@@ -3302,6 +3306,7 @@ select {
 
 </div>
 
+<script>if("serviceWorker" in navigator){navigator.serviceWorker.register("/sw.js").catch(()=>{});}</script>
 </body>
 
 </html>
@@ -6730,6 +6735,95 @@ def app_icon_svg():
     response.headers["Cache-Control"] = "no-store, max-age=0"
     return response
 
+
+
+# Separate BedFlow PWA identity, independent from Doctor Call.
+BEDFLOW_MANIFEST = json.dumps({
+    "id": "/bedflow/",
+    "name": "ACT BedFlow",
+    "short_name": "ACT BedFlow",
+    "start_url": "/bedflow/open?source=pwa",
+    "scope": "/",
+    "display": "standalone",
+    "background_color": "#f4f7fb",
+    "theme_color": "#073466",
+    "description": "Live ICU bed availability and confirmation.",
+    "icons": [
+        {"src": "/bedflow/icon-192.png?v=1", "sizes": "192x192",
+         "type": "image/png", "purpose": "any"},
+        {"src": "/bedflow/icon-512.png?v=1", "sizes": "512x512",
+         "type": "image/png", "purpose": "any"}
+    ]
+})
+
+BEDFLOW_INSTALL_HTML = """
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#073466">
+<link rel="manifest" href="/bedflow/manifest.json?v=1">
+<link rel="apple-touch-icon" href="/bedflow/icon-192.png?v=1">
+<title>Install ACT BedFlow</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;font-family:Arial,sans-serif;background:linear-gradient(140deg,#d6f5ff,#edf3fb);color:#0c2447}
+main{max-width:480px;width:100%;text-align:center;background:white;border-radius:25px;padding:25px;box-shadow:0 20px 60px #12345a25}
+.logo{width:130px;height:130px;border-radius:27px;object-fit:cover}h1{font-size:30px;margin:18px 0 8px}p{color:#52647d;line-height:1.55}
+button,a.action{width:100%;display:block;padding:16px;margin-top:12px;border:0;border-radius:13px;background:#0864c9;color:white;text-decoration:none;font-weight:bold;font-size:17px;cursor:pointer}
+a.action{background:#eaf3ff;color:#084b96}.hint{margin-top:18px;padding:14px;background:#f1f6fd;border-radius:12px;font-size:14px;color:#4a607c;line-height:1.6}
+.qr{width:180px;height:180px;margin-top:14px}.credit{font-size:12px;color:#72829a;margin-top:20px}
+</style></head><body><main>
+<img class="logo" src="/bedflow/icon-512.png?v=1" alt="ACT BedFlow">
+<h1>ACT BedFlow</h1><p>Live ICU bed availability — install on your phone for quick access.</p>
+<button id="install">📲 Install ACT BedFlow</button>
+<a class="action" href="/bedflow/open">Open BedFlow</a>
+<div class="hint" id="hint">Android: Open in Chrome → menu ⋮ → Install app.<br>iPhone: Open in Safari → Share → Add to Home Screen.</div>
+<img class="qr" src="/bedflow/qr.png" alt="QR code for BedFlow installation">
+<div class="credit">Powered by Dr. Abdulfatah Suliman · Insurance Department</div>
+</main><script>
+let promptEvent=null;
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();promptEvent=e;});
+document.getElementById("install").addEventListener("click",async()=>{
+if(promptEvent){await promptEvent.prompt();promptEvent=null;}
+else{document.getElementById("hint").textContent="If Install is unavailable, open this page in Google Chrome, tap ⋮ and choose Install app. On iPhone use Safari → Share → Add to Home Screen.";}
+});
+window.addEventListener("appinstalled",()=>{document.getElementById("install").textContent="Installed ✓";});
+if("serviceWorker" in navigator){navigator.serviceWorker.register("/sw.js").catch(()=>{});}
+</script></body></html>
+"""
+
+@app.route("/bedflow/manifest.json")
+def bedflow_manifest():
+    response = Response(BEDFLOW_MANIFEST, mimetype="application/manifest+json")
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+@app.route("/bedflow/icon-192.png")
+def bedflow_icon_192():
+    return send_file(BASE_DIR / "act-bedflow-192.png", mimetype="image/png", max_age=0)
+
+@app.route("/bedflow/icon-512.png")
+def bedflow_icon_512():
+    return send_file(BASE_DIR / "act-bedflow-512.png", mimetype="image/png", max_age=0)
+
+@app.route("/bedflow/open")
+@login_required
+def bedflow_open():
+    return redirect(url_for("home"))
+
+@app.route("/bedflow/install")
+def bedflow_install():
+    return render_template_string(BEDFLOW_INSTALL_HTML)
+
+@app.route("/bedflow/qr.png")
+def bedflow_qr():
+    import qrcode
+    target = request.url_root.rstrip("/") + url_for("bedflow_install")
+    qr = qrcode.QRCode(box_size=8, border=3)
+    qr.add_data(target)
+    qr.make(fit=True)
+    output = io.BytesIO()
+    qr.make_image(fill_color="#073466", back_color="white").save(output, format="PNG")
+    output.seek(0)
+    return send_file(output, mimetype="image/png", max_age=3600)
 
 # =========================
 # START
