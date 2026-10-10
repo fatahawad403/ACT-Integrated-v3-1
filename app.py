@@ -482,6 +482,76 @@ input:focus,select:focus{border-color:#7eaef1;box-shadow:0 0 0 4px rgba(18,103,2
   .actions .btn{width:100%;padding:12px 8px}
   .desktop-table{display:none}.mobile-cases{display:block}
 }
+
+/* Doctor Call compact referral experience — layout only, keep form names and server actions. */
+.nav-menu{position:relative;z-index:30}
+.nav-menu>summary{list-style:none;user-select:none;min-width:108px;cursor:pointer}
+.nav-menu>summary::-webkit-details-marker{display:none}
+.nav-menu[open]>summary{background:#ffffff2c}
+.nav-links{position:absolute;top:calc(100% + 10px);right:0;z-index:50;min-width:200px;
+ display:grid;gap:4px;padding:8px;background:#fff;border:1px solid #d8e5f4;border-radius:15px;
+ box-shadow:0 14px 35px rgba(15,45,95,.2)}
+.nav-links .btn{display:flex;justify-content:flex-start;white-space:nowrap;color:#1c4069;
+ border:0;background:transparent;padding:11px 13px}
+.nav-links .btn:hover{background:#edf5ff}
+.wrap{max-width:1160px}
+.topbar{padding:13px 17px}
+.topbar .brand h1{font-size:22px;line-height:1.2}
+.hero{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+.hero-main{padding:13px 17px;border-radius:17px;box-shadow:none}
+.hero-main h2{font-size:19px}
+.hero-main p{font-size:13px;margin:4px 0 0}
+.stats{grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.stat{display:flex;align-items:baseline;gap:9px;padding:11px 13px;border-radius:14px;box-shadow:none}
+.stat strong{font-size:22px}
+.stat span{font-size:12px}
+.card{padding:18px;border-radius:18px;margin-bottom:12px}
+.smart-card{background:#fff;border-color:#dfe7f2}
+.smart-head{margin-bottom:3px}
+.smart-title{gap:10px}
+.smart-title h2{font-size:22px}
+.smart-icon{width:40px;height:40px;border-radius:12px;font-size:22px}
+.smart-card>.help{margin-top:4px}
+.file-wrap{background:#f7fbff;padding:15px;border-radius:14px}
+.file-wrap>label{font-size:14px;color:#293d5b}
+.file-wrap input[type=file]{border:0;background:#fff;max-width:100%;padding:10px}
+.pdf-explainer{margin-top:9px;color:#527398;font-size:12px}
+.pdf-explainer summary,.optional-fields summary{cursor:pointer;list-style:none}
+.pdf-explainer summary:before{content:"ⓘ  "}
+.pdf-explainer summary::-webkit-details-marker,.optional-fields summary::-webkit-details-marker{display:none}
+.pdf-explainer[open] .help{font-size:12px;margin:8px 2px 0}
+.optional-fields{border:1px solid #e3ebf5;background:#fbfdff;border-radius:12px;padding:10px 13px}
+.optional-fields summary{color:#426489;font-size:13px;font-weight:800}
+.optional-fields[open] .grid{margin-top:12px}
+.smart-card .actions{display:flex;gap:10px;flex-wrap:wrap}
+.smart-card .actions .btn{flex:1;min-width:190px;padding:13px 16px;font-size:15px}
+.fallback{padding:16px;border-radius:14px;margin-top:12px;background:#f9fbff;border-color:#bfd7f2}
+.fallback .fallback-title{font-size:17px}
+.fallback .help{margin-top:5px}
+.fallback .grid{margin-top:11px}
+.fallback .btn{width:100%}
+.cases-head h2{font-size:19px}
+@media(max-width:720px){
+ .wrap{padding:10px 10px calc(25px + env(safe-area-inset-bottom))}
+ .topbar{flex-direction:row;align-items:center;gap:8px;padding:11px}
+ .brand-wrap{flex:1;min-width:0}
+ .brand-icon{width:43px;height:43px;padding:3px}
+ .brand h1{font-size:18px}
+ .brand .sub{font-size:11px}
+ .top-actions{width:auto;display:flex;flex:0 0 auto}
+ .top-actions .btn{width:auto;font-size:13px;padding:9px 11px}
+ .nav-links .btn{width:100%}
+ .hero-main{padding:13px}
+ .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+ .stat{padding:9px;display:block}
+ .stat strong{font-size:21px}
+ .stat span{display:block}
+ .smart-card .actions{display:grid;grid-template-columns:1fr 1fr}
+ .smart-card .actions .btn{min-width:0;font-size:13px;padding:12px 8px}
+ .card{padding:14px}
+ .grid{grid-template-columns:1fr}
+}
+
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -497,10 +567,15 @@ input:focus,select:focus{border-color:#7eaef1;box-shadow:0 0 0 4px rgba(18,103,2
       </div>
     </div>
     <div class="top-actions">
-      <a class="btn light" href="/modules">🏠 Operations</a>
-      <a class="btn light" href="/">🛏️ BedFlow</a>
-      <a class="btn light" href="/doctor-call/admin/doctors">👥 Doctors</a>
-      <a class="btn light" href="/logout">Logout</a>
+      <details class="nav-menu">
+        <summary class="btn light" aria-label="Open navigation menu">☰ Menu</summary>
+        <nav class="nav-links" aria-label="Doctor Call navigation">
+          <a class="btn light" href="/modules">🏠 Operations</a>
+          <a class="btn light" href="/">🛏️ BedFlow</a>
+          <a class="btn light" href="/doctor-call/admin/doctors">👥 Doctors</a>
+          <a class="btn light" href="/logout">Logout</a>
+        </nav>
+      </details>
     </div>
   </div>
 
@@ -508,9 +583,8 @@ input:focus,select:focus{border-color:#7eaef1;box-shadow:0 0 0 4px rgba(18,103,2
 
   <section class="hero">
     <div class="hero-main">
-      <span class="role-pill">{{ 'ADMIN CONTROL' if role == 'admin' else 'INSURANCE CONTROL' }}</span>
-      <h2>Clinical Referral Workspace</h2>
-      <p>Upload once, let ACT triage when confidence is high, or choose the specialty and doctor manually at any time.</p>
+      <h2>Medical referrals</h2>
+      <p>Upload a PDF and choose automatic routing or a specific doctor.</p>
     </div>
     <div class="stats">
       <div class="stat"><strong>{{ pending_count }}</strong><span>Pending cases</span></div>
@@ -523,15 +597,14 @@ input:focus,select:focus{border-color:#7eaef1;box-shadow:0 0 0 4px rgba(18,103,2
   <div class="card smart-card">
     <div class="smart-head">
       <div class="smart-title">
-        <div class="smart-icon">🤖</div>
+        <div class="smart-icon">📋</div>
         <div>
-          <span class="beta">CLINICAL TRIAGE · SMART + MANUAL</span>
-          <h2 style="margin:7px 0 0">Smart Referral</h2>
+          <h2 style="margin:0">New referral</h2>
         </div>
       </div>
     </div>
     <div class="help">
-      Upload the report once. ACT reads it, routes it automatically when confident, or keeps the same file ready so Insurance can choose the specialty and doctor manually.
+      Add the medical report, then send it automatically or manually.
     </div>
 
     <form id="smartReferralForm" method="post" action="/doctor-call/smart-referral" enctype="multipart/form-data" style="margin-top:16px">
@@ -540,27 +613,40 @@ input:focus,select:focus{border-color:#7eaef1;box-shadow:0 0 0 4px rgba(18,103,2
       <input type="hidden" id="manualSpecialtyValue" name="manual_specialty">
       <input type="hidden" id="manualDoctorValue" name="manual_doctor_username">
       <div class="grid">
-        <div>
-          <label>Case No. (optional)</label>
-          <input name="case_no" placeholder="Auto-generated if empty">
-        </div>
-        <div>
-          <label>Patient Ref. (optional)</label>
-          <input name="patient_ref" placeholder="Patient / approval reference">
-        </div>
         <div class="file-wrap" style="grid-column:1/-1">
           <label>Medical report + attachments (PDF) *</label>
           <input id="smartPdfs" type="file" name="pdfs" accept="application/pdf" multiple required>
-          <div class="help">
-            ACT reads text from the full report (up to 30 pages). If pages are scanned images, Browser OCR is applied to selected scanned pages so the diagnosis can be found even when it is not near the beginning.
-          </div>
+          <details class="pdf-explainer">
+            <summary>How report reading works</summary>
+            <p class="help">The system reads up to 30 PDF pages. For scanned reports it can run browser OCR on selected pages.</p>
+          </details>
         </div>
+        <details class="optional-fields" style="grid-column:1/-1">
+          <summary>+ Optional case details</summary>
+          <div class="grid">
+            <div>
+              <label>Case No. (optional)</label>
+              <input name="case_no" placeholder="Auto-generated if empty">
+            </div>
+            <div>
+              <label>Patient Ref. (optional)</label>
+              <input name="patient_ref" placeholder="Patient / approval reference">
+            </div>
+          </div>
+        </details>
       </div>
 
+      <div style="margin-top:14px">
+        <div class="actions">
+          <button id="smartSubmit" class="btn smart" type="submit">✨ Auto-send</button>
+          <button id="manualOpen" class="btn primary" type="button">Choose doctor</button>
+        </div>
+      </div>
+      <div id="smartProgress" class="progress" role="status" aria-live="polite"></div>
       <div id="manualFallback" class="fallback">
-        <div class="fallback-title">Manual Send / Fallback</div>
+        <div class="fallback-title">Choose a specialty and doctor</div>
         <div id="fallbackReason" class="help">
-          If automatic routing cannot identify the specialty, choose it here and select the doctor from the existing Doctors Directory.
+          Your selected PDF will be sent to this doctor.
         </div>
         <div id="detectedSpecialtyBox" class="detected"></div>
         <div class="grid">
@@ -592,13 +678,7 @@ input:focus,select:focus{border-color:#7eaef1;box-shadow:0 0 0 4px rgba(18,103,2
         </div>
       </div>
 
-      <div id="smartProgress" class="progress"></div>
-      <div style="margin-top:14px">
-        <div class="actions">
-          <button id="smartSubmit" class="btn smart" type="submit">Analyze & Auto-Send 🔔</button>
-          <button id="manualOpen" class="btn primary" type="button">Manual Send ✋</button>
-        </div>
-      </div>
+
     </form>
   </div>
 
@@ -653,7 +733,7 @@ input:focus,select:focus{border-color:#7eaef1;box-shadow:0 0 0 4px rgba(18,103,2
     {% endif %}
   </div>
   <div style="text-align:center;color:#8a95a8;font-size:12px;margin:20px 0 4px;font-weight:700">
-    Powered by Dr. Abdulfatah Sulieman · Insurance Department
+    Powered by Dr. Abdulfatah Suliman · Insurance Department
   </div>
 <script>
 const fallbackBox=document.getElementById("manualFallback");
@@ -951,7 +1031,7 @@ async function postReferral(manualMode){
     progress("Could not contact ACT. Please try again.");
   }finally{
     smartSubmit.disabled=false;
-    smartSubmit.textContent="Analyze & Auto-Send 🔔";
+    smartSubmit.textContent="✨ Auto-send";
     manualSend.disabled=false;
     manualSend.textContent="Send to Selected Doctor 🔔";
   }
