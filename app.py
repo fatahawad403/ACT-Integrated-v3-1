@@ -735,6 +735,7 @@ input:focus,select:focus{border-color:#7eaef1;box-shadow:0 0 0 4px rgba(18,103,2
   <div style="text-align:center;color:#8a95a8;font-size:12px;margin:20px 0 4px;font-weight:700">
     Powered by Dr. Abdulfatah Suliman · Insurance Department
   </div>
+</div>
 <script>
 const fallbackBox=document.getElementById("manualFallback");
 const fallbackReason=document.getElementById("fallbackReason");
