@@ -161,208 +161,86 @@ MODULES_HTML_V31 = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b63df">
 <link rel="icon" href="/app-icon-192.png?v=4-4-4">
-<meta name="theme-color" content="#0b5fd7">
 <title>ACT Operations</title>
 <style>
-:root{
-  --bg:#eef4fb;--surface:#fff;--text:#152238;--muted:#6b7890;
-  --blue:#1267e5;--blue2:#0b4fb3;--green:#1da66f;--pink:#ef5c7a;
-  --violet:#7156e8;--line:#dfe7f2;--shadow:0 14px 34px rgba(30,71,121,.09);
-}
+:root{color-scheme:light;--blue:#136ce9;--ink:#182f4e;--muted:#697b91;--line:#dee7f1}
 *{box-sizing:border-box}
-html{background:var(--bg)}
-body{
-  margin:0;font-family:Inter,Arial,sans-serif;color:var(--text);
-  background:
-    radial-gradient(circle at 85% 0,#dbeaff 0,transparent 28%),
-    linear-gradient(180deg,#edf5ff 0,#f7f9fc 430px);
-  min-height:100vh;
-}
+body{margin:0;min-height:100svh;background:linear-gradient(180deg,#f0f6fd,#f8fafc);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
 a{color:inherit}
-.shell{max-width:1220px;margin:auto;padding:18px 18px 34px}
-.appbar{
-  display:flex;justify-content:space-between;align-items:center;gap:14px;
-  padding:14px 18px;background:linear-gradient(135deg,#0b63df,#0878ef);
-  color:#fff;border-radius:20px;box-shadow:0 14px 32px rgba(12,96,214,.22);
-  margin-bottom:18px;
-}
-.appbar-brand{display:flex;align-items:center;gap:12px}
-.logo{width:52px;height:52px;border-radius:15px;background:#fff1;padding:5px}
-.appbar h1{margin:0;font-size:25px}
-.user-chip{
-  display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:999px;
-  background:#ffffff16;border:1px solid #ffffff35;font-weight:800;white-space:nowrap
-}
-.hero{
-  background:linear-gradient(135deg,#fff 0,#fbfdff 65%,#e9f3ff 100%);
-  border:1px solid var(--line);border-radius:24px;padding:24px;
-  box-shadow:var(--shadow);margin-bottom:18px;position:relative;overflow:hidden;
-}
-.hero:after{
-  content:"✚";position:absolute;right:42px;top:16px;font-size:110px;
-  color:#cfe3ff;opacity:.8;font-weight:900
-}
-.hero h2{margin:0;font-size:34px;position:relative;z-index:1}
-.hero p{margin:8px 0 0;color:var(--muted);font-size:19px;position:relative;z-index:1}
-.module-grid{
-  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;
-}
-.module-card{
-  background:var(--surface);border:1px solid var(--line);border-radius:24px;
-  padding:22px;box-shadow:var(--shadow);position:relative;overflow:hidden;
-}
-.module-card:after{
-  content:"";position:absolute;width:180px;height:180px;border-radius:50%;
-  right:-70px;top:-70px;background:#eef5ff
-}
-.module-head{display:flex;align-items:flex-start;gap:16px;position:relative;z-index:1}
-.module-icon{
-  width:72px;height:72px;border-radius:20px;display:grid;place-items:center;
-  font-size:38px;background:#eff5ff;flex:0 0 auto
-}
-.module-icon.warm{background:#fff4e9}
-.module-title{font-size:27px;font-weight:900;margin:6px 0 6px}
-.module-desc{color:var(--muted);font-size:16px;line-height:1.5;max-width:560px}
-.metric{
-  margin-top:18px;padding:16px;border-radius:17px;background:#f6f9fd;
-  display:flex;align-items:center;justify-content:space-between;gap:12px;
-  position:relative;z-index:1
-}
-.metric strong{font-size:34px;margin-right:8px}
-.metric-copy{font-weight:800}
-.open-btn{
-  margin-top:14px;width:100%;display:flex;align-items:center;justify-content:center;
-  padding:14px 16px;border-radius:14px;text-decoration:none;font-weight:900;
-  color:#fff;background:linear-gradient(135deg,#1267e5,#2785f5);
-  box-shadow:0 9px 20px rgba(18,103,229,.2);position:relative;z-index:1
-}
-.actions{
-  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px
-}
-.action{
-  display:flex;align-items:center;justify-content:space-between;gap:12px;
-  background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px 18px;
-  text-decoration:none;font-weight:900;box-shadow:0 8px 20px rgba(30,71,121,.05)
-}
-.action-icon{
-  width:46px;height:46px;border-radius:14px;display:grid;place-items:center;
-  font-size:23px;background:#eeeaff;color:var(--violet)
-}
-.action.manage .action-icon{background:#e8fbf3;color:var(--green)}
-.action.logout .action-icon{background:#ffeaf0;color:var(--pink)}
-.chev{font-size:24px;color:#8ba0bb}
-.role-note{text-align:center;color:#91a0b4;font-size:12px;margin-top:20px}
-@media(max-width:820px){
-  .module-grid{grid-template-columns:1fr}
-  .actions{grid-template-columns:1fr}
-}
+.shell{max-width:900px;margin:0 auto;padding:18px 16px 32px}
+.appbar{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:15px 18px;background:linear-gradient(115deg,#0754bd,#187af2);color:#fff;border-radius:18px;box-shadow:0 9px 25px #155dc021}
+.identity{display:flex;align-items:center;min-width:0;gap:11px}
+.logo{width:43px;height:43px;object-fit:cover;border-radius:12px;flex:none}
+.identity h1{margin:0;font-size:22px;line-height:1.2;letter-spacing:-.4px}
+.account{display:flex;align-items:center;gap:8px;min-width:0}
+.user{font-size:12px;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;opacity:.92}
+.logout{display:inline-block;padding:8px 12px;border-radius:9px;background:#ffffff22;border:1px solid #ffffff60;text-decoration:none;font-size:13px;font-weight:750;white-space:nowrap}
+.logout:hover,.logout:focus-visible{background:#ffffff36}
+.intro{padding:24px 3px 18px}
+.intro h2{margin:0 0 5px;font-size:24px;letter-spacing:-.5px}
+.intro p{margin:0;color:var(--muted);font-size:14px}
+.modules{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.module{display:flex;align-items:center;gap:13px;min-width:0;min-height:118px;padding:18px;background:#fff;border:1px solid var(--line);border-radius:17px;text-decoration:none;box-shadow:0 6px 16px #1d4f7f0b;transition:border-color .15s,transform .15s}
+.module:hover,.module:focus-visible{border-color:#6aadee;transform:translateY(-1px);outline-offset:3px}
+.module-icon{display:grid;place-items:center;flex:none;width:51px;height:51px;border-radius:13px;background:#eaf3ff;font-size:27px}
+.module-icon.call{background:#fff4df}
+.module-copy{flex:1;min-width:0}
+.module-title{display:block;font-size:19px;font-weight:800;line-height:1.3}
+.module-sub{display:block;font-size:12px;color:var(--muted);margin-top:3px;line-height:1.35}
+.arrow{font-size:23px;font-weight:750;color:#7f9ab8}
+.tools{margin-top:19px}
+.tools summary{cursor:pointer;color:#526a83;font-weight:700;font-size:13px;list-style:inside}
+.tools-links{display:flex;gap:9px;flex-wrap:wrap;padding:12px 2px}
+.tools-links a{display:inline-block;background:#fff;border:1px solid var(--line);padding:9px 11px;border-radius:10px;text-decoration:none;font-size:13px;font-weight:650}
+.footer{text-align:center;color:#93a1b3;font-size:11px;padding:18px 0 0}
 @media(max-width:620px){
-  .shell{padding:10px 10px calc(24px + env(safe-area-inset-bottom))}
-  .appbar{border-radius:16px;padding:12px 13px;align-items:flex-start}
-  .logo{width:44px;height:44px;border-radius:13px}
-  .appbar h1{font-size:20px}
-  .user-chip{font-size:12px;padding:8px 10px;max-width:48vw;overflow:hidden;text-overflow:ellipsis}
-  .hero{padding:19px;border-radius:19px}
-  .hero h2{font-size:27px}
-  .hero p{font-size:16px}
-  .hero:after{font-size:80px;right:14px}
-  .module-card{padding:17px;border-radius:19px}
-  .module-icon{width:58px;height:58px;border-radius:16px;font-size:30px}
-  .module-title{font-size:23px}
-  .module-desc{font-size:14px}
-  .metric strong{font-size:27px}
+ .shell{padding:10px 10px 24px}
+ .appbar{padding:11px 12px;border-radius:14px}
+ .identity h1{font-size:19px}
+ .logo{width:37px;height:37px}
+ .user{max-width:92px;font-size:11px}
+ .logout{font-size:11px;padding:7px 8px}
+ .intro{padding:21px 4px 14px}
+ .intro h2{font-size:21px}
+ .modules{grid-template-columns:1fr;gap:10px}
+ .module{min-height:92px;padding:13px;border-radius:14px}
+ .module-icon{height:44px;width:44px;font-size:24px}
+ .module-title{font-size:18px}
+ .module-sub{font-size:12px}
 }
-</style>
-</head>
-<body>
-<div class="shell">
-  <header class="appbar">
-    <div class="appbar-brand">
-      <img class="logo" src="/app-icon-192.png?v=4-4-4" alt="ACT">
-      <h1>ACT Operations</h1>
-    </div>
-    <div class="user-chip">👤 {{ display_name }}</div>
-  </header>
-
-  <section class="hero">
-    <h2>ACT Operations</h2>
-    <p>BedFlow + Doctor Call</p>
-  </section>
-
-  <section class="module-grid">
-    {% if show_bedflow %}
-    <article class="module-card">
-      <div class="module-head">
-        <div class="module-icon">🛏️</div>
-        <div>
-          <div class="module-title">ACT BedFlow</div>
-          <div class="module-desc">ICU bed availability, confirmation and live status tracking.</div>
-        </div>
-      </div>
-      <div class="metric">
-        <div><strong>{{ available_beds }}</strong><span class="metric-copy">beds available now</span></div>
-        <span class="chev">›</span>
-      </div>
-      <a class="open-btn" href="/">Open BedFlow →</a>
-    </article>
-    {% endif %}
-
-    {% if show_doctor_call %}
-    <article class="module-card">
-      <div class="module-head">
-        <div class="module-icon warm">🔔</div>
-        <div>
-          <div class="module-title">ACT Doctor Call</div>
-          <div class="module-desc">Case PDF review, doctor-specific notifications and Accept / Reject workflow.</div>
-        </div>
-      </div>
-      <div class="metric">
-        <div><strong>{{ pending_cases }}</strong><span class="metric-copy">cases awaiting action</span></div>
-        <span class="chev">›</span>
-      </div>
-      <a class="open-btn" href="{% if role == 'doctor' %}/doctor-call/doctor{% else %}/doctor-call{% endif %}">Open Doctor Call →</a>
-    </article>
-    {% endif %}
-  </section>
-
-  <section class="actions">
-    <a class="action" href="/change-password">
-      <span style="display:flex;align-items:center;gap:12px">
-        <span class="action-icon">🔐</span>
-        <span>Change Password</span>
-      </span>
-      <span class="chev">›</span>
-    </a>
-
-    {% if role == 'admin' %}
-    <a class="action manage" href="/doctor-call/admin/doctors">
-      <span style="display:flex;align-items:center;gap:12px">
-        <span class="action-icon">👥</span>
-        <span>Manage Doctors</span>
-      </span>
-      <span class="chev">›</span>
-    </a>
-    {% endif %}
-
-    <a class="action logout" href="/logout">
-      <span style="display:flex;align-items:center;gap:12px">
-        <span class="action-icon">↪</span>
-        <span>Sign Out</span>
-      </span>
-      <span class="chev">›</span>
-    </a>
-  </section>
-
-  <div class="role-note">
-    Signed in as {{ role|upper }}<br>
-    <strong>Powered by Dr. Abdulfatah Sulieman · Insurance Department</strong>
-  </div>
-</div>
-</body>
-</html>
+@media(max-width:355px){.user{display:none}}
+</style></head>
+<body><main class="shell">
+<header class="appbar">
+  <div class="identity"><img class="logo" src="/app-icon-192.png?v=4-4-4" alt="ACT"><h1>ACT Operations</h1></div>
+  <div class="account"><span class="user" title="{{ display_name }}">{{ display_name }}</span><a class="logout" href="/logout">Log out</a></div>
+</header>
+<section class="intro"><h2>Workspace</h2><p>Choose the service you need.</p></section>
+<nav class="modules" aria-label="ACT services">
+{% if show_bedflow %}
+<a class="module" href="/">
+  <span class="module-icon" aria-hidden="true">🛏️</span>
+  <span class="module-copy"><span class="module-title">ACT BedFlow</span><span class="module-sub">ICU bed status</span></span>
+  <span class="arrow" aria-hidden="true">›</span>
+</a>
+{% endif %}
+{% if show_doctor_call %}
+<a class="module" href="{% if role == 'doctor' %}/doctor-call/doctor{% else %}/doctor-call{% endif %}">
+  <span class="module-icon call" aria-hidden="true">🔔</span>
+  <span class="module-copy"><span class="module-title">ACT Doctor Call</span><span class="module-sub">Cases &amp; notifications</span></span>
+  <span class="arrow" aria-hidden="true">›</span>
+</a>
+{% endif %}
+</nav>
+<details class="tools"><summary>Account &amp; settings</summary><div class="tools-links">
+  <a href="/change-password">Change password</a>
+  {% if role == 'admin' %}<a href="/doctor-call/admin/doctors">Manage doctors</a>{% endif %}
+</div></details>
+<footer class="footer">Powered by Dr. Abdulfatah Suliman · Insurance Department</footer>
+</main></body></html>
 """
-
 DOCTOR_CALL_INSURANCE_HTML = """
 <!doctype html>
 <html>
