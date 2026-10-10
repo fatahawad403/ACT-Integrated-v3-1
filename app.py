@@ -175,7 +175,7 @@ a{color:inherit}
 .logo{width:43px;height:43px;object-fit:cover;border-radius:12px;flex:none}
 .identity h1{margin:0;font-size:22px;line-height:1.2;letter-spacing:-.4px}
 .account{display:flex;align-items:center;gap:8px;min-width:0}
-.user{font-size:12px;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;opacity:.92}
+.user{font-size:12px;max-width:230px;overflow-wrap:anywhere;line-height:1.3;opacity:.92}
 .logout{display:inline-block;padding:8px 12px;border-radius:9px;background:#ffffff22;border:1px solid #ffffff60;text-decoration:none;font-size:13px;font-weight:750;white-space:nowrap}
 .logout:hover,.logout:focus-visible{background:#ffffff36}
 .intro{padding:24px 3px 18px}
@@ -191,7 +191,10 @@ a{color:inherit}
 .module-sub{display:block;font-size:12px;color:var(--muted);margin-top:3px;line-height:1.35}
 .arrow{font-size:23px;font-weight:750;color:#7f9ab8}
 .tools{margin-top:19px}
-.tools summary{cursor:pointer;color:#526a83;font-weight:700;font-size:13px;list-style:inside}
+.tools summary{cursor:pointer;color:#526a83;font-weight:700;font-size:13px;list-style:none;display:flex;align-items:center;gap:8px}
+.tools summary::-webkit-details-marker{display:none}
+.tools summary::after{content:'⌄';display:inline-block;transition:transform .15s;font-size:18px;line-height:1}
+.tools[open] summary::after{transform:rotate(180deg)}
 .tools-links{display:flex;gap:9px;flex-wrap:wrap;padding:12px 2px}
 .tools-links a{display:inline-block;background:#fff;border:1px solid var(--line);padding:9px 11px;border-radius:10px;text-decoration:none;font-size:13px;font-weight:650}
 .footer{text-align:center;color:#93a1b3;font-size:11px;padding:18px 0 0}
@@ -200,8 +203,10 @@ a{color:inherit}
  .appbar{padding:11px 12px;border-radius:14px}
  .identity h1{font-size:19px}
  .logo{width:37px;height:37px}
- .user{max-width:92px;font-size:11px}
+ .user{max-width:none;min-width:0;font-size:11px;flex:1}
  .logout{font-size:11px;padding:7px 8px}
+ .appbar{flex-wrap:wrap}
+ .account{width:100%;justify-content:space-between;border-top:1px solid #ffffff34;padding-top:8px}
  .intro{padding:21px 4px 14px}
  .intro h2{font-size:21px}
  .modules{grid-template-columns:1fr;gap:10px}
@@ -210,7 +215,7 @@ a{color:inherit}
  .module-title{font-size:18px}
  .module-sub{font-size:12px}
 }
-@media(max-width:355px){.user{display:none}}
+@media(max-width:355px){.identity h1{font-size:18px}}
 </style></head>
 <body><main class="shell">
 <header class="appbar">
