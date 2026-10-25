@@ -14,6 +14,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from functools import wraps
+from act_controls import setup_controls
 from werkzeug.security import (
     check_password_hash,
     generate_password_hash
@@ -53,7 +54,7 @@ if DATABASE_URL.startswith("postgres://"):
     )
 
 USE_POSTGRES = bool(DATABASE_URL)
-LOCAL_DB = Path(__file__).with_name("bedflow.db")
+LOCAL_DB = Path(os.environ.get("ACT_LOCAL_DB_PATH", str(Path(__file__).with_name("bedflow.db"))))
 
 if USE_POSTGRES:
     import psycopg
@@ -241,7 +242,7 @@ a{color:inherit}
 </nav>
 <details class="tools"><summary>Account &amp; settings</summary><div class="tools-links">
   <a href="/change-password">Change password</a>
-  {% if role == 'admin' %}<a href="/doctor-call/admin/doctors">Manage doctors</a>{% endif %}
+  {% if role == 'admin' %}<a href="/admin/controls">Usage &amp; app access</a><a href="/doctor-call/admin/doctors">Manage doctors</a>{% endif %}
 </div></details>
 <footer class="footer">Powered by Dr. Abdulfatah Suliman · Insurance Department</footer>
 </main></body></html>
@@ -6792,9 +6793,24 @@ def bedflow_qr():
 # =========================
 # START
 # =========================
+
+def control_service_for_request():
+    if request.path == "/doctor-call" or request.path.startswith("/doctor-call/"):
+        return "doctor_call"
+    if request.endpoint == "home" and session.get("role") == "doctor":
+        return "doctor_call"
+    if request.endpoint in {"home", "update_bed", "confirm_icu", "admin_add_bed", "admin_toggle_bed", "activity_log", "bedflow_open", "bedflow_install"}:
+        return "bedflow"
+    return None
+
+
 init_db()
 init_doctor_call_db()
 ensure_vapid_keys()
+setup_controls(app, get_db, services={"bedflow": "ACT BedFlow", "doctor_call": "ACT Doctor Call"},
+    service_for_request=control_service_for_request,
+    tracked_pages={"home", "bedflow_install", "doctor_call_insurance", "doctor_call_doctor", "doctor_call_case", "doctor_call_install"},
+    public_endpoints={"bedflow_install", "doctor_call_install"}, back_url="/modules")
 if __name__ == "__main__":
 
 
@@ -6803,3 +6819,4 @@ if __name__ == "__main__":
         port=5000,
         debug=False
     )
+
